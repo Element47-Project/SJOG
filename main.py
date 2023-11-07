@@ -5,7 +5,6 @@ import pandas as pd
 import io
 import xlrd
 
-a = 1
 load_dotenv()
 password =  os.environ.get('password')
 credentials = Credentials(
