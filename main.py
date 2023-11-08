@@ -1,11 +1,10 @@
 import os
 from dotenv import load_dotenv
-from exchangelib import Credentials,Account,DELEGATE,FileAttachment,Mailbox
+from exchangelib import Credentials,Account,DELEGATE,FileAttachment
 import pandas as pd
 import io
 import xlrd
 #from sqlalchemy import create_engine
-#import fitz
 import camelot
 import time
 
@@ -16,18 +15,25 @@ credentials = Credentials(
     'element47testing@outlook.com',
     password
 )
+account = Account(
+    'element47testing@outlook.com',
+    credentials=credentials,
+    autodiscover=True,
+    access_type=DELEGATE)
 #azure account
 """ sql_server = os.environ.get('AZURE_SQL_SERVER')
 sql_db_name = os.environ.get('AZURE_SQL_DB_NAME')
 sql_username = os.environ.get('AZURE_SQL_USERNAME')
 sql_password = os.environ.get('AZURE_SQL_PASSWORD') """
 
+#get the path for this script to save pdfs
+script_path = __file__
+# To get the absolute path to the script file, use abspath
+absolute_script_path = os.path.abspath(__file__)
+# To get the directory containing the script, use dirname
+script_dir = os.path.dirname(absolute_script_path)
+pdf_dir = script_dir + '/pdfs'
 
-account = Account(
-    'element47testing@outlook.com',
-    credentials=credentials,
-    autodiscover=True,
-    access_type=DELEGATE)
 
 #check the extension of the attachment file
 #read the attachments
@@ -88,7 +94,7 @@ def is_desired_domain(email_address, domain_list):
 desired_domains = ['@gmail.com']
 
 
-def process_pdf_tables(attachment_content, directory="/Users/duanyangdu/Documents/Element47/untitled folder/pdfs", filename=None):
+def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # Ensure the directory exists
     if not os.path.isdir(directory):
         os.makedirs(directory, exist_ok=True)
@@ -122,3 +128,6 @@ process_email_attachments(read_files) """
 
 # save the file on Box
 # upload the file on Azure
+
+
+
