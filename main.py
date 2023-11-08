@@ -91,7 +91,7 @@ def process_email_attachments(attachment_files):
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
 # Define the domains you want to filter by
-desired_domains = ['@gmail.com']
+desired_domains = ['@element47.com.au']
 
 #fetch the tables from pdf attachments
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
@@ -117,14 +117,14 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails)
+process_email_attachments(filtered_unread_emails) 
 
 
 # fetch read files
 all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
 # filter out the emails from the specific domains
-""" filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails) """
+filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
+process_email_attachments(filtered_read_emails)
 
 # save the file on Box
 # upload the file on Azure
