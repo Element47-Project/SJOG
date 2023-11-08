@@ -93,7 +93,7 @@ def is_desired_domain(email_address, domain_list):
 # Define the domains you want to filter by
 desired_domains = ['@gmail.com']
 
-
+#fetch the tables from pdf attachments
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # Ensure the directory exists
     if not os.path.isdir(directory):
@@ -114,8 +114,6 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     return dataframes
 
 # fetch unread files
-""" unread_files = account.inbox.filter(is_read=False, sender=sender_email).order_by('-datetime_received')
-process_email_attachments(unread_files) """
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
@@ -123,8 +121,10 @@ process_email_attachments(filtered_unread_emails)
 
 
 # fetch read files
-""" read_files = account.inbox.filter(is_read=True, sender=sender_email).order_by('-datetime_received')
-process_email_attachments(read_files) """
+all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
+# filter out the emails from the specific domains
+""" filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
+process_email_attachments(filtered_unread_emails) """
 
 # save the file on Box
 # upload the file on Azure
