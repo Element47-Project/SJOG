@@ -7,6 +7,7 @@ import xlrd
 #from sqlalchemy import create_engine
 import camelot
 import time
+import pyodbc
 
 load_dotenv()
 #email account
@@ -20,11 +21,42 @@ account = Account(
     credentials=credentials,
     autodiscover=True,
     access_type=DELEGATE)
+
 #azure account
-""" sql_server = os.environ.get('AZURE_SQL_SERVER')
+sql_server = os.environ.get('AZURE_SQL_SERVER')
 sql_db_name = os.environ.get('AZURE_SQL_DB_NAME')
 sql_username = os.environ.get('AZURE_SQL_USERNAME')
-sql_password = os.environ.get('AZURE_SQL_PASSWORD') """
+sql_password = os.environ.get('ZURE_SQL_PASSWORD')
+
+# Establish a connection to the Azure SQL database
+def connect_and_test_azure_sql():
+    try:
+        connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
+        connection = pyodbc.connect(connection_string, timeout=10)
+        print("Successfully connected to Azure SQL database.")
+        
+        # Perform a test query to ensure the connection is valid
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            if cursor.fetchone()[0] == 1:
+                print("Test query executed successfully. Connection is valid.")
+            else:
+                print("Test query did not return expected result. Check connection details.")
+        return connection
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+# Check the connection to Azure SQL Database
+azure_connection = connect_and_test_azure_sql()
+if azure_connection is not None:
+    # Connection is successful
+    azure_connection.close()  # Close the connection if it's no longer needed here
+else:
+    # Handle connection failure
+    print("Failed to connect to Azure SQL Database.")
+
+        
 
 #get the path for this script to save pdfs
 script_path = __file__
@@ -77,7 +109,7 @@ def process_email_attachments(attachment_files):
                             for i, table in enumerate(tables):
                                 print(f"Table {i} from {pdf_filename}:")
                                 print(table)
-                                # You can add code here to upload to Azure or handle the DataFrame as needed
+                                 # You can add code here to upload to Azure or handle the DataFrame as needed
                         except Exception as e:
                             print(f"Error processing PDF tables in file: {pdf_filename}. Error: {e}")
                         item.is_read = True
@@ -85,6 +117,14 @@ def process_email_attachments(attachment_files):
                     pass
                 # Mark the item as read after processing
                 item.is_read = True
+                
+                excel_data = pd.read_excel(io.BytesIO(attachment.content), sheet_name=None)
+        for sheet_name, df in excel_data.items():
+          print(f"Sheet: {sheet_name}")
+          print(df)
+    # Example call to upload the dataframe
+    #upload_dataframe_to_azure_sql(df, "YourAzureTableName")
+    #item.is_read = True
 
 
 #filter the senders
@@ -117,17 +157,27 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails) 
+#process_email_attachments(filtered_unread_emails) 
 
 
 # fetch read files
 all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
 # filter out the emails from the specific domains
 filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_read_emails)
+#process_email_attachments(filtered_read_emails)
 
+#def upload_dataframe_to_azure_sql(df, table_name):
+    #with connect_to_azure_sql() as conn:
+        #cursor = conn.cursor()
+        # Here you would convert your dataframe to a list of tuples
+        # and write an INSERT statement to insert the data into your Azure SQL table
+        # This is a placeholder for the real implementation which would depend on your specific needs
+        #conn.commit()
+
+    
 # save the file on Box
 # upload the file on Azure
+# Daily temperature data 
 
 
 
