@@ -126,7 +126,7 @@ def process_email_attachments(attachment_files):
     #upload_dataframe_to_azure_sql(df, "YourAzureTableName")
     #item.is_read = True
 
-
+a = 1
 #filter the senders
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
