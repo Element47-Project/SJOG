@@ -57,7 +57,6 @@ else:
     print("Failed to connect to Azure SQL Database.")
 
         
-
 #get the path for this script to save pdfs
 script_path = __file__
 # To get the absolute path to the script file, use abspath
@@ -126,7 +125,6 @@ def process_email_attachments(attachment_files):
     #upload_dataframe_to_azure_sql(df, "YourAzureTableName")
     #item.is_read = True
 
-a = 1
 #filter the senders
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
