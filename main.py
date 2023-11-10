@@ -9,8 +9,6 @@ import camelot
 import time
 import pyodbc
 
-a = 2
-
 load_dotenv()
 #email account
 password =  os.environ.get('password')
@@ -28,13 +26,13 @@ account = Account(
 sql_server = os.environ.get('AZURE_SQL_SERVER')
 sql_db_name = os.environ.get('AZURE_SQL_DB_NAME')
 sql_username = os.environ.get('AZURE_SQL_USERNAME')
-sql_password = os.environ.get('ZURE_SQL_PASSWORD')
+sql_password = os.environ.get('AZURE_SQL_PASSWORD')
 
 # Establish a connection to the Azure SQL database
 def connect_and_test_azure_sql():
     try:
         connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
-        connection = pyodbc.connect(connection_string, timeout=10)
+        connection = pyodbc.connect(connection_string, timeout=60)
         print("Successfully connected to Azure SQL database.")
         
         # Perform a test query to ensure the connection is valid
