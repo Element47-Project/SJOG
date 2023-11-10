@@ -9,6 +9,8 @@ import camelot
 import time
 import pyodbc
 
+a = 2
+
 load_dotenv()
 #email account
 password =  os.environ.get('password')
