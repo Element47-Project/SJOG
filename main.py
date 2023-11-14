@@ -117,10 +117,7 @@ def process_email_attachments(attachment_files):
                 # Mark the item as read after processing
                 item.is_read = True
                 
-                excel_data = pd.read_excel(io.BytesIO(attachment.content), sheet_name=None)
-        for sheet_name, df in excel_data.items():
-          print(f"Sheet: {sheet_name}")
-          print(df)
+
     # Example call to upload the dataframe
     #upload_dataframe_to_azure_sql(df, "YourAzureTableName")
     #item.is_read = True
@@ -129,7 +126,7 @@ def process_email_attachments(attachment_files):
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
 # Define the domains you want to filter by
-desired_domains = ['@element47.com.au']
+desired_domains = ['@element47.com.au','@gmail.com']
 
 #fetch the tables from pdf attachments
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
@@ -155,7 +152,7 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-#process_email_attachments(filtered_unread_emails) 
+process_email_attachments(filtered_unread_emails) 
 
 
 # fetch read files
