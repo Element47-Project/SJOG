@@ -27,11 +27,11 @@ sql_server = os.environ.get('AZURE_SQL_SERVER')
 sql_db_name = os.environ.get('AZURE_SQL_DB_NAME')
 sql_username = os.environ.get('AZURE_SQL_USERNAME')
 sql_password = os.environ.get('AZURE_SQL_PASSWORD')
+connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
 
 # Establish a connection to the Azure SQL database
 def connect_and_test_azure_sql():
     try:
-        connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
         connection = pyodbc.connect(connection_string, timeout=60)
         print("Successfully connected to Azure SQL database.")
         
@@ -48,13 +48,13 @@ def connect_and_test_azure_sql():
         return None
 
 # Check the connection to Azure SQL Database
-azure_connection = connect_and_test_azure_sql()
+""" azure_connection = connect_and_test_azure_sql()
 if azure_connection is not None:
     # Connection is successful
     azure_connection.close()  # Close the connection if it's no longer needed here
 else:
     # Handle connection failure
-    print("Failed to connect to Azure SQL Database.")
+    print("Failed to connect to Azure SQL Database.") """
 
         
 #get the path for this script to save pdfs
@@ -79,11 +79,31 @@ def process_email_attachments(attachment_files):
                     # Convert bytes from the attachment directly to a pandas dataframe
                     #print(attachment.name)
                     try:
-                        excel_data = pd.read_excel(io.BytesIO(attachment.content), sheet_name=None)
-                        for e in excel_data.items():
-                            print(e)
+                        #excel_data = pd.read_excel(io.BytesIO(attachment.content), sheet_name=None)
+                        """ for e in excel_data.items():
+                            print(e) """
+                        """ for sheet_name, df in excel_data.items():
+                            print(f"Sheet name: {sheet_name}")
+                            print(df) """
                             # You can add code here to upload to Azure
-                            item.is_read = True
+                            # Convert bytes to a DataFrame
+                        excel_stream = io.BytesIO(attachment.content)
+                        # Read the first 20 rows to find header
+                        temp_df = pd.read_excel(excel_stream, header=None, nrows=20)
+                        #print(temp_df)
+                        azure_columns = get_azure_table_columns(connection_string,'TestingPerthEle')
+                        #print(azure_columns)
+                        header_row_index = find_header_row(temp_df, azure_columns)
+                        if header_row_index is not None:
+                            # Read the full data starting from the header row
+                            excel_data = pd.read_excel(excel_stream, header=header_row_index)
+                            print(excel_data)  # Process this DataFrame as needed
+                        else:
+                            print(f"No matching header row found in {filename}")
+
+
+
+                        item.is_read = True
                     except xlrd.biffh.XLRDError as e:
                         if str(e) == "Workbook is encrypted":
                             print(f"Cannot process encrypted file: {attachment.name}")
@@ -126,7 +146,7 @@ def process_email_attachments(attachment_files):
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
 # Define the domains you want to filter by
-desired_domains = ['@element47.com.au','@gmail.com']
+desired_domains = ['@gmail.com']
 
 #fetch the tables from pdf attachments
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
@@ -148,6 +168,29 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # os.remove(file_path)
     return dataframes
 
+
+
+
+# Function to find header row in Excel file
+def find_header_row(df, expected_columns,threshold=0.8):
+    required_matches = int(len(expected_columns) * threshold)
+    for i, row in df.iterrows():
+        matched_columns = sum([col in row.values for col in expected_columns])
+        if matched_columns >= required_matches:
+            return i
+    return None
+
+def get_azure_table_columns(connection_string, azure_table_name):
+    with pyodbc.connect(connection_string) as conn:
+        cursor = conn.cursor()
+        query = f"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{azure_table_name}' ORDER BY ORDINAL_POSITION"
+        cursor.execute(query)
+        columns = [row[0] for row in cursor.fetchall()]
+    return columns
+
+
+
+
 # fetch unread files
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
@@ -161,13 +204,7 @@ all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_receive
 filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
 #process_email_attachments(filtered_read_emails)
 
-#def upload_dataframe_to_azure_sql(df, table_name):
-    #with connect_to_azure_sql() as conn:
-        #cursor = conn.cursor()
-        # Here you would convert your dataframe to a list of tuples
-        # and write an INSERT statement to insert the data into your Azure SQL table
-        # This is a placeholder for the real implementation which would depend on your specific needs
-        #conn.commit()
+
 
     
 # save the file on Box
