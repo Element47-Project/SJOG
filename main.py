@@ -97,7 +97,10 @@ def process_email_attachments(attachment_files):
                         if header_row_index is not None:
                             # Read the full data starting from the header row
                             excel_data = pd.read_excel(excel_stream, header=header_row_index)
-                            print(excel_data)  # Process this DataFrame as needed
+                            #print(excel_data)  
+                            # Assuming 'excel_data' is the DataFrame you want to upload
+                            upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
+
                         else:
                             print(f"No matching header row found in {filename}")
 
@@ -187,6 +190,31 @@ def get_azure_table_columns(connection_string, azure_table_name):
         cursor.execute(query)
         columns = [row[0] for row in cursor.fetchall()]
     return columns
+
+
+def upload_dataframe_to_azure_sql(df, table_name, connection_string):
+    # Connect to the Azure SQL database
+    with pyodbc.connect(connection_string) as conn:
+        cursor = conn.cursor()
+        
+        # Iterate over DataFrame rows as tuples
+        for row in df.itertuples(index=False, name=None):
+            # SQL INSERT statement
+            insert_query = f"""INSERT INTO {table_name} ([ACCOUNT NUMBER], [ACNAME], [NMI], [METER], [SITE ADDRESS], [END INTERVAL], [PERIOD], [E-STREAM(KWH)], [Q-STREAM(KVARH)], [T-STREAM(KVAH)], [SOLAR KWH])
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            cleaned_data = []
+            for item in row:
+                if pd.isnull(item):
+                    cleaned_data.append(None) 
+                else:
+                    cleaned_data.append(item) 
+            
+            # Execute the query
+            cursor.execute(insert_query, row)
+
+        # Commit the transaction
+        conn.commit()
+
 
 
 
