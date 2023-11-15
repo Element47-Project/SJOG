@@ -199,18 +199,15 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
         
         # Iterate over DataFrame rows as tuples
         for row in df.itertuples(index=False, name=None):
+            # Clean the data - convert NaN to None
+            cleaned_data = [None if pd.isnull(item) else item for item in row]
+            
             # SQL INSERT statement
             insert_query = f"""INSERT INTO {table_name} ([ACCOUNT NUMBER], [ACNAME], [NMI], [METER], [SITE ADDRESS], [END INTERVAL], [PERIOD], [E-STREAM(KWH)], [Q-STREAM(KVARH)], [T-STREAM(KVAH)], [SOLAR KWH])
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
-            cleaned_data = []
-            for item in row:
-                if pd.isnull(item):
-                    cleaned_data.append(None) 
-                else:
-                    cleaned_data.append(item) 
             
-            # Execute the query
-            cursor.execute(insert_query, row)
+            # Execute the query with cleaned data
+            cursor.execute(insert_query, cleaned_data)
 
         # Commit the transaction
         conn.commit()
