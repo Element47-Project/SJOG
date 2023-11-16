@@ -11,6 +11,8 @@ import pyodbc
 import pickle
 import datetime
 import pytz
+import ntplib
+from time import ctime
 
 load_dotenv()
 # email account
@@ -261,8 +263,15 @@ else:
 # save the file on Box
 # upload the file on Azure
 # Daily temperature data
+def get_time(server="pool.ntp.org"):
+    client = ntplib.NTPClient()
+    response = client.request(server)
+    utc_time = datetime.datetime.utcfromtimestamp(response.tx_time)  # Create a UTC datetime object
+    utc_time = utc_time.replace(tzinfo=pytz.utc)  # Make it timezone-aware
+    return utc_time
 
-current_time = datetime.datetime.now(pytz.utc)  # Get current time in UTC
+
+current_time = get_time()  # Get current time in UTC
 time_list.append(current_time)
 save_time_list(time_list)
 print(time_list)
