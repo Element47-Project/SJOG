@@ -9,7 +9,6 @@ import camelot
 import time
 import pyodbc
 
-a = 1
 
 load_dotenv()
 #email account
