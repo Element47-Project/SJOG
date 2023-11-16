@@ -31,7 +31,7 @@ sql_password = os.environ.get('AZURE_SQL_PASSWORD')
 connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
 
 # Establish a connection to the Azure SQL database
-def connect_and_test_azure_sql():
+""" def connect_and_test_azure_sql():
     try:
         connection = pyodbc.connect(connection_string, timeout=60)
         print("Successfully connected to Azure SQL database.")
@@ -46,7 +46,7 @@ def connect_and_test_azure_sql():
         return connection
     except Exception as e:
         print(f"An error occurred: {e}")
-        return None
+        return None """
 
 # Check the connection to Azure SQL Database
 """ azure_connection = connect_and_test_azure_sql()
