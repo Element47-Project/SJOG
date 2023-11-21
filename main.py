@@ -252,14 +252,6 @@ else:
     # Process email attachments
     process_email_attachments(emails)
 
-# fetch read files
-# all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
-# # filter out the emails from the specific domains
-# filtered_read_emails = [email for email in all_read_emails if
-#                         is_desired_domain(email.sender.email_address, desired_domains)]
-# process_email_attachments(filtered_read_emails)
-
-
 # save the file on Box
 # upload the file on Azure
 # Daily temperature data
