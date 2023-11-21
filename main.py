@@ -77,7 +77,7 @@ pdf_dir = script_dir + '/pdfs'
 # handling error for encrypted files
 def process_email_attachments(attachment_files):
     for item in attachment_files:
-        if (item.attachments):
+        if item.attachments:
             attachements = item.attachments
             for attachment in attachements:
                 (filename, extension) = os.path.splitext(attachment.name)
@@ -104,9 +104,9 @@ def process_email_attachments(attachment_files):
                         if header_row_index is not None:
                             # Read the full data starting from the header row
                             excel_data = pd.read_excel(excel_stream, header=header_row_index)
-                            # print(excel_data)
+                            print(excel_data)
                             # Assuming 'excel_data' is the DataFrame you want to upload
-                            upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
+                            # upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
 
                         else:
                             print(f"No matching header row found in {filename}")
@@ -121,7 +121,7 @@ def process_email_attachments(attachment_files):
                 elif extension == '.csv' and isinstance(attachment, FileAttachment):
                     csv_data = pd.read_csv(io.BytesIO(attachment.content), sheet_name=None)
                     for c in csv_data.items():
-                        print(c)
+                        # print(c)
                         # You can add code here to upload to Azure
                         item.is_read = True
 
@@ -237,20 +237,20 @@ start_time = time_list[-1] if time_list else None
 
 time_list = load_time_list()
 start_time = time_list[-1] if time_list else None
-email_filter = {'is_read': False}
+email_filter = {}
 if start_time is not None:
     email_filter['datetime_received__gte'] = start_time
 # fetch unread files
-all_unread_emails = account.inbox.filter(**email_filter).order_by('-datetime_received')
+emails = account.inbox.filter(**email_filter).order_by('-datetime_received')
 # filter out the emails from the specific domains
-filtered_unread_emails = [email for email in all_unread_emails if
+emails = [email for email in emails if
                           is_desired_domain(email.sender.email_address, desired_domains)]
 # process_email_attachments(filtered_unread_emails)
-if not filtered_unread_emails:
+if not emails:
     print("There are no new attachments")
 else:
     # Process email attachments
-    process_email_attachments(filtered_unread_emails)
+    process_email_attachments(emails)
 
 # fetch read files
 # all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
@@ -271,7 +271,7 @@ def get_time(server="pool.ntp.org"):
     return utc_time
 
 
-current_time = get_time()  # Get current time in UTC
-time_list.append(current_time)
-save_time_list(time_list)
-print(time_list)
+# current_time = get_time()  # Get current time in UTC
+# time_list.append(current_time)
+# save_time_list(time_list)
+# print(time_list)
