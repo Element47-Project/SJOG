@@ -248,6 +248,11 @@ if not emails:
 else:
     # Process email attachments
     process_email_attachments(emails)
+    # get the current time and store it in a file
+    # current_time = get_time()  # Get current time in UTC
+    # time_list.append(current_time)
+    # save_time_list(time_list)
+    # print(time_list)
 
 
 # save the file on Box
@@ -261,8 +266,3 @@ def get_time(server="pool.ntp.org"):
     utc_time = utc_time.replace(tzinfo=pytz.utc)  # Make it timezone-aware
     return utc_time
 
-# get the current time and store it in a file
-# current_time = get_time()  # Get current time in UTC
-# time_list.append(current_time)
-# save_time_list(time_list)
-# print(time_list)
