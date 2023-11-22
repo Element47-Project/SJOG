@@ -227,12 +227,10 @@ def load_time_list():
     else:
         return []
 
+
 def save_time_list(time_list):
     with open(filename, 'wb') as file:
         pickle.dump(time_list, file)
-
-time_list = load_time_list()
-start_time = time_list[-1] if time_list else None
 
 
 time_list = load_time_list()
@@ -240,21 +238,22 @@ start_time = time_list[-1] if time_list else None
 email_filter = {}
 if start_time is not None:
     email_filter['datetime_received__gte'] = start_time
-# fetch unread files
 emails = account.inbox.filter(**email_filter).order_by('-datetime_received')
 # filter out the emails from the specific domains
 emails = [email for email in emails if
-                          is_desired_domain(email.sender.email_address, desired_domains)]
-# process_email_attachments(filtered_unread_emails)
+          is_desired_domain(email.sender.email_address, desired_domains)]
+# process_email_attachments(emails)
 if not emails:
     print("There are no new attachments")
 else:
     # Process email attachments
     process_email_attachments(emails)
 
+
 # save the file on Box
 # upload the file on Azure
 # Daily temperature data
+
 def get_time(server="pool.ntp.org"):
     client = ntplib.NTPClient()
     response = client.request(server)
@@ -262,7 +261,7 @@ def get_time(server="pool.ntp.org"):
     utc_time = utc_time.replace(tzinfo=pytz.utc)  # Make it timezone-aware
     return utc_time
 
-
+# get the current time and store it in a file
 # current_time = get_time()  # Get current time in UTC
 # time_list.append(current_time)
 # save_time_list(time_list)
