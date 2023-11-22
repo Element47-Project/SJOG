@@ -246,9 +246,8 @@ emails = [email for email in emails if
 if not emails:
     print("There are no new attachments")
 else:
-    # Process email attachments
     process_email_attachments(emails)
-    # get the current time and store it in a file
+    # get the current time and store it in a file (the comment below for testing)
     # current_time = get_time()  # Get current time in UTC
     # time_list.append(current_time)
     # save_time_list(time_list)
