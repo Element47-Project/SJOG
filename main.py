@@ -35,34 +35,6 @@ sql_password = os.environ.get('AZURE_SQL_PASSWORD')
 connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
 
 
-# Establish a connection to the Azure SQL database
-""" def connect_and_test_azure_sql():
-    try:
-        connection = pyodbc.connect(connection_string, timeout=60)
-        print("Successfully connected to Azure SQL database.")
-
-        # Perform a test query to ensure the connection is valid
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            if cursor.fetchone()[0] == 1:
-                print("Test query executed successfully. Connection is valid.")
-            else:
-                print("Test query did not return expected result. Check connection details.")
-        return connection
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None """
-
-
-# Check the connection to Azure SQL Database
-""" azure_connection = connect_and_test_azure_sql()
-if azure_connection is not None:
-    # Connection is successful
-    azure_connection.close()  # Close the connection if it's no longer needed here
-else:
-    # Handle connection failure
-    print("Failed to connect to Azure SQL Database.") """
-
 # get the path for this script to save pdfs
 script_path = __file__
 # To get the absolute path to the script file, use abspath
@@ -71,6 +43,7 @@ absolute_script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(absolute_script_path)
 pdf_dir = script_dir + '/pdfs'
 
+chunk_index = 1  # Initialize chunk index
 
 # check the extension of the attachment file
 # read the attachments
@@ -86,13 +59,6 @@ def process_email_attachments(attachment_files):
                     # Convert bytes from the attachment directly to a pandas dataframe
                     # print(attachment.name)
                     try:
-                        # excel_data = pd.read_excel(io.BytesIO(attachment.content), sheet_name=None)
-                        """ for e in excel_data.items():
-                            print(e) """
-                        """ for sheet_name, df in excel_data.items():
-                            print(f"Sheet name: {sheet_name}")
-                            print(df) """
-                        # You can add code here to upload to Azure
                         # Convert bytes to a DataFrame
                         excel_stream = io.BytesIO(attachment.content)
                         # Read the first 20 rows to find header
@@ -102,11 +68,16 @@ def process_email_attachments(attachment_files):
                         # print(azure_columns)
                         header_row_index = find_header_row(temp_df, azure_columns)
                         if header_row_index is not None:
+                             # Reading in chunks of 10,000 rows
+                             chunk_size = 10000
+                             for chunk in pd.read_excel(excel_stream, header=header_row_index, chunksize=chunk_size):
+                                 process_chunk(chunk, chunk_index, 'TestingPerthEle', connection_string)  # Define 'process_chunk' function to handle each chunk
+                                 chunk_index += 1
                             # Read the full data starting from the header row
-                            excel_data = pd.read_excel(excel_stream, header=header_row_index)
-                            # print(excel_data)
+                                 #excel_data = pd.read_excel(excel_stream, header=header_row_index)
+                                 #print(excel_data)
                             # Assuming 'excel_data' is the DataFrame you want to upload
-                            upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
+                                 #upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
 
                         else:
                             print(f"No matching header row found in {filename}")
@@ -146,8 +117,9 @@ def process_email_attachments(attachment_files):
                 item.is_read = True
 
     # Example call to upload the dataframe
-    # upload_dataframe_to_azure_sql(df, "YourAzureTableName")
-    # item.is_read = True
+    #upload_dataframe_to_azure_sql(df, "YourAzureTableName")
+    #item.is_read = True
+
 
 
 # filter the senders
@@ -181,13 +153,19 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
 
 
 # Function to find header row in Excel file
-def find_header_row(df, expected_columns, threshold=0.8):
-    required_matches = int(len(expected_columns) * threshold)
-    for i, row in df.iterrows():
-        matched_columns = sum([col in row.values for col in expected_columns])
-        if matched_columns >= required_matches:
-            return i
-    return None
+def find_header_row(df, expected_columns):
+   expected_columns_set = set(expected_columns)
+   for i, row in df.iterrows():
+       # Extract non-null values from the row and convert them to a set
+       row_values_set = set(row.dropna())
+
+       # Optionally convert to the same case for case-insensitive comparison
+       # row_values_set = set(value.lower() for value in row.dropna())
+       # expected_columns_set = set(column.lower() for column in expected_columns)
+
+       if row_values_set == expected_columns_set:
+           return i
+   return None
 
 
 def get_azure_table_columns(connection_string, azure_table_name):
@@ -198,22 +176,34 @@ def get_azure_table_columns(connection_string, azure_table_name):
         columns = [row[0] for row in cursor.fetchall()]
     return columns
 
+def process_chunk(chunk, chunk_index, table_name, connection_string):
+    try:
+        print(f"Processing chunk {chunk_index}, Number of rows: {len(chunk)}")
+    # Perform any data cleaning or transformation here
+        for row in chunk.itertuples(index=False, name=None):
+            # Clean the data - convert NaN to None
+            cleaned_data = [None if pd.isnull(item) else item for item in row]
+
+            # Upload the processed chunk to Azure SQL
+            upload_dataframe_to_azure_sql(chunk, table_name, connection_string)
+            print(f"Chunk {chunk_index} processed successfully")
+    except Exception as e:
+        print(f"Error processing chunk {chunk_index}: {e}")
 
 def upload_dataframe_to_azure_sql(df, table_name, connection_string):
     # Connect to the Azure SQL database
     with pyodbc.connect(connection_string) as conn:
         cursor = conn.cursor()
 
-        # Iterate over DataFrame rows as tuples
-        for row in df.itertuples(index=False, name=None):
-            # Clean the data - convert NaN to None
-            cleaned_data = [None if pd.isnull(item) else item for item in row]
-
-            # SQL INSERT statement
-            insert_query = f"""INSERT INTO {table_name} ([ACCOUNT NUMBER], [ACNAME], [NMI], [METER], [SITE ADDRESS], [END INTERVAL], [PERIOD], [E-STREAM(KWH)], [Q-STREAM(KVARH)], [T-STREAM(KVAH)], [SOLAR KWH])
+        # SQL INSERT statement
+        insert_query = f"""INSERT INTO {table_name} ([ACCOUNT NUMBER], [ACNAME], [NMI], [METER], [SITE ADDRESS], [END INTERVAL], [PERIOD], [E-STREAM(KWH)], [Q-STREAM(KVARH)], [T-STREAM(KVAH)], [SOLAR KWH])
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
-            # Execute the query with cleaned data
-            cursor.execute(insert_query, cleaned_data)
+            
+        # Convert the DataFrame to a list of tuples
+        data_tuples = [tuple(x) for x in df.to_records(index=False)]
+        
+        # Execute the query with data tuples
+        cursor.execute(insert_query, data_tuples)
 
         # Commit the transaction
         conn.commit()
@@ -263,7 +253,7 @@ else:
 # save the file on Box
 # upload the file on Azure
 # Daily temperature data
-def get_time(server="pool.ntp.org"):
+""" def get_time(server="pool.ntp.org"):
     client = ntplib.NTPClient()
     response = client.request(server)
     utc_time = datetime.datetime.utcfromtimestamp(response.tx_time)  # Create a UTC datetime object
@@ -274,4 +264,4 @@ def get_time(server="pool.ntp.org"):
 current_time = get_time()  # Get current time in UTC
 time_list.append(current_time)
 save_time_list(time_list)
-print(time_list)
+print(time_list) """
