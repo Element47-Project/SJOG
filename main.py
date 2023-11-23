@@ -51,7 +51,7 @@ def get_total_rows(excel_stream):
 def process_email_attachments(attachment_files):
     #print("Processing email attachments:", len(attachment_files))
     all_tables_columns = get_all_table_columns(connection_string)
-    chunk_size = 50 
+    chunk_size = 2000
     """ for table, columns in all_tables_columns.items():
         print(f"Table: {table}, Columns: {columns}") """
     for item in attachment_files:
