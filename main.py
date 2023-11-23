@@ -117,6 +117,7 @@ def process_email_attachments(attachment_files):
                             print(f"Cannot process encrypted file: {attachment.name}")
                         else:
                             raise e
+                        return False
 
                 elif extension == '.csv' and isinstance(attachment, FileAttachment):
                     csv_data = pd.read_csv(io.BytesIO(attachment.content), sheet_name=None)
@@ -124,6 +125,7 @@ def process_email_attachments(attachment_files):
                         # print(c)
                         # You can add code here to upload to Azure
                         item.is_read = True
+                    return False
 
                 elif extension == '.pdf':
                     # Handle PDF files
@@ -139,6 +141,7 @@ def process_email_attachments(attachment_files):
                             # You can add code here to upload to Azure or handle the DataFrame as needed
                     except Exception as e:
                         print(f"Error processing PDF tables in file: {pdf_filename}. Error: {e}")
+                        return False
                     item.is_read = True
                 else:
                     pass
