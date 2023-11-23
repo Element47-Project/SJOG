@@ -144,6 +144,7 @@ def process_email_attachments(attachment_files):
                     pass
                 # Mark the item as read after processing
                 item.is_read = True
+    return True
 
     # Example call to upload the dataframe
     # upload_dataframe_to_azure_sql(df, "YourAzureTableName")
@@ -253,11 +254,16 @@ if not emails:
     print("There are no new attachments")
 else:
     process_email_attachments(emails)
-    # get the current time and store it in a file (the comment below for testing)
-    # current_time = get_time()  # Get current time in UTC
-    # time_list.append(current_time)
-    # save_time_list(time_list)
-    # print(time_list)
+    process_status = process_email_attachments(emails)
+
+    # If processing is successful, proceed to get and save the current time
+    if process_status:
+        current_time = get_time()  # Get current time in UTC
+        time_list.append(current_time)
+        save_time_list(time_list)
+        # print(time_list)
+    else:
+        print("Error occurred during email attachment processing")
 
 
 # save the file on Box
