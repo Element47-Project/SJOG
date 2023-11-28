@@ -8,9 +8,10 @@ import camelot
 import time
 import pyodbc
 import pickle
-import ntplib
 import datetime
-
+import pytz
+import ntplib
+from time import ctime
 
 load_dotenv()
 #email account
