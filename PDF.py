@@ -3,7 +3,6 @@ import pandas as pd
 import pyodbc
 def PDF_upload():
     table_name = 'Water Use History Statement 1 CLAYTON ST MIDLAND LOT 515.pdf'
-    attachment
     # Read PDF tables
     tables = tabula.read_pdf(table_name, pages='all', multiple_tables=True)
 
