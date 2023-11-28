@@ -182,10 +182,19 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
             # Clean the data - convert NaN to None
             cleaned_data = [None if pd.isnull(item) else item for item in row]
             # Execute the query with cleaned data
-            cursor.execute(insert_query, cleaned_data)
+            #cursor.execute(insert_query, cleaned_data)
+            try:
+                # Execute the query with cleaned data
+                cursor.execute(insert_query, cleaned_data)
+            except pyodbc.IntegrityError as e:
+                # Handle primary key conflict
+                print(f"Skipping row due to primary key conflict: {e}")
+                continue  # Skip this row and continue with the next row
+        print('THE DATA IS BEEN PROCESSED.')
+
         # Commit the transaction
         conn.commit()
-    print('THE DATA IS SUCCESSFULLY UPLOADED.')
+    #print('THE DATA IS BEEN PROCESSED.')
 
 
 # fetch unread files
