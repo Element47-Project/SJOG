@@ -71,7 +71,7 @@ def process_email_attachments(attachment_files):
                         # Compare with all table column names
                         for table_name, azure_columns in all_tables_columns.items():
                             header_row_index = find_header_row(temp_df, azure_columns)
-                            print(f"Header row index for {table_name}: {header_row_index}")
+                            #print(f"Header row index for {table_name}: {header_row_index}")
 
                             if header_row_index is not None:
                                 # Read the full data starting from the header row
@@ -81,7 +81,7 @@ def process_email_attachments(attachment_files):
                                break
 
                         if header_row_index is None:
-                             print(f"No header found in file: {attachment.name}")
+                             #print(f"No header found in file: {attachment.name}")
                              continue 
                          # Get the total number of rows in the Excel file
                         total_rows = get_total_rows(excel_stream)
@@ -103,7 +103,7 @@ def process_email_attachments(attachment_files):
                           
                             batch_df = pd.read_excel(excel_stream, skiprows=start_row, nrows=end_row - start_row + 1, header=None)
 
-                          print("DataFrame columns:", batch_df.columns)
+                          #print("DataFrame columns:", batch_df.columns)
                           
                           upload_dataframe_to_azure_sql(batch_df, table_name, connection_string)
                           start_row += chunk_size
@@ -216,7 +216,7 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
         
         # SQL INSERT statement
         insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
-        print("SQL Insert Query:", insert_query)
+        # print("SQL Insert Query:", insert_query)
         # Iterate over DataFrame rows as tuples
         for row in df.itertuples(index=False, name=None):
             # Clean the data - convert NaN to None
