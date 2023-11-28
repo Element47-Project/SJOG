@@ -14,8 +14,8 @@ import ntplib
 from time import ctime
 
 load_dotenv()
-#email account
-password =  os.environ.get('password')
+# email account
+password = os.environ.get('password')
 credentials = Credentials(
     'element47testing@outlook.com',
     password
@@ -26,16 +26,14 @@ account = Account(
     autodiscover=True,
     access_type=DELEGATE)
 
-#azure account
+# azure account
 sql_server = os.environ.get('AZURE_SQL_SERVER')
 sql_db_name = os.environ.get('AZURE_SQL_DB_NAME')
 sql_username = os.environ.get('AZURE_SQL_USERNAME')
 sql_password = os.environ.get('AZURE_SQL_PASSWORD')
 connection_string = f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={sql_server};DATABASE={sql_db_name};UID={sql_username};PWD={sql_password}'
 
-
-        
-#get the path for this script to save pdfs
+# get the path for this script to save pdfs
 script_path = __file__
 # To get the absolute path to the script file, use abspath
 absolute_script_path = os.path.abspath(__file__)
@@ -44,25 +42,25 @@ script_dir = os.path.dirname(absolute_script_path)
 pdf_dir = script_dir + '/pdfs'
 
 
-#check the extension of the attachment file
-#read the attachments
-#handling error for encrypted files
+# check the extension of the attachment file
+# read the attachments
+# handling error for encrypted files
 def process_email_attachments(attachment_files):
     all_tables_columns = get_all_table_columns(connection_string)
     """ for table, columns in all_tables_columns.items():
         print(f"Table: {table}, Columns: {columns}") """
     for item in attachment_files:
-        if item.attachments:
+        if (item.attachments):
             attachements = item.attachments
             for attachment in attachements:
-                (filename,extension) = os.path.splitext(attachment.name)
-                if (extension == '.xlsx' or extension == '.xls') and isinstance(attachment, FileAttachment):   # Ensure it's a FileAttachment type
+                (filename, extension) = os.path.splitext(attachment.name)
+                if (extension == '.xlsx' or extension == '.xls') and isinstance(attachment,
+                                                                                FileAttachment):  # Ensure it's a FileAttachment type
                     try:
-                            # Convert bytes to a DataFrame
+                        # Convert bytes to a DataFrame
                         excel_stream = io.BytesIO(attachment.content)
                         # Read the first 20 rows to find header
                         temp_df = pd.read_excel(excel_stream, header=None, nrows=20)
-
                         # Compare with all table column names
                         for table_name, azure_columns in all_tables_columns.items():
                             header_row_index = find_header_row(temp_df, azure_columns)
@@ -72,43 +70,25 @@ def process_email_attachments(attachment_files):
                                 # Upload to Azure SQL
                                 upload_dataframe_to_azure_sql(excel_data, table_name, connection_string)
                                 break
-                        # print(temp_df)
-                        azure_columns = get_azure_table_columns(connection_string, 'TestingPerthEle')
-                        # print(azure_columns)
-                        header_row_index = find_header_row(temp_df, azure_columns)
-                        if header_row_index is not None:
-                            # Read the full data starting from the header row
-                            excel_data = pd.read_excel(excel_stream, header=header_row_index)
-                            print(excel_data)
-                            # Assuming 'excel_data' is the DataFrame you want to upload
-                            # upload_dataframe_to_azure_sql(excel_data, 'TestingPerthEle', connection_string)
-
-                        else:
-                            print(f"No matching header row found in {filename}")
-
-
                         item.is_read = True
                     except xlrd.biffh.XLRDError as e:
                         if str(e) == "Workbook is encrypted":
                             print(f"Cannot process encrypted file: {attachment.name}")
                         else:
                             raise e
-
                         return False
 
                 elif extension == '.csv' and isinstance(attachment, FileAttachment):
                     csv_data = pd.read_csv(io.BytesIO(attachment.content), sheet_name=None)
                     for c in csv_data.items():
-                        # print(c)
+                        print(c)
                         # You can add code here to upload to Azure
                         item.is_read = True
-                    return False
 
                 elif extension == '.pdf':
+                    # Handle PDF files
                     try:
                         # Extract filename without extension to use as a basis for the PDF file
-                        # base_filename = os.path.splitext(attachment.name)[0]
-
                         pdf_filename = f"{filename}.pdf"
                         tables = process_pdf_tables(io.BytesIO(attachment.content), filename=pdf_filename)
                         for i, table in enumerate(tables):
@@ -125,19 +105,16 @@ def process_email_attachments(attachment_files):
                 item.is_read = True
     return True
 
-    # Example call to upload the dataframe
-    # upload_dataframe_to_azure_sql(df, "YourAzureTableName")
-    # item.is_read = True
-
-
-
-#filter the senders
+# filter the senders
 def is_desired_domain(email_address, domain_list):
     return any(email_address.strip().lower().endswith(domain) for domain in domain_list)
+
+
 # Define the domains you want to filter by
 desired_domains = ['@gmail.com']
 
-#fetch the tables from pdf attachments
+
+# fetch the tables from pdf attachments
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # Ensure the directory exists
     if not os.path.isdir(directory):
@@ -156,8 +133,6 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # Optionally, you can delete the PDF file after processing
     # os.remove(file_path)
     return dataframes
-
-
 
 
 # Function to find header row in Excel file
@@ -180,14 +155,14 @@ def get_all_table_columns(connection_string):
     tables_columns = {}
     with pyodbc.connect(connection_string) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION")
+        cursor.execute(
+            "SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION")
         for row in cursor.fetchall():
             table_name, column_name = row
             if table_name not in tables_columns:
                 tables_columns[table_name] = []
             tables_columns[table_name].append(column_name)
     return tables_columns
-
 
 
 def upload_dataframe_to_azure_sql(df, table_name, connection_string):
@@ -213,19 +188,19 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
     print('THE DATA IS SUCCESSFULLY UPLOADED.')
 
 
-# For Testing
 # fetch unread files
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
 # filter out the emails from the specific domains
-filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails) 
-
+filtered_unread_emails = [email for email in all_unread_emails if
+                          is_desired_domain(email.sender.email_address, desired_domains)]
+process_email_attachments(filtered_unread_emails)
 
 # fetch read files
 all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
 # filter out the emails from the specific domains
-filtered_read_emails = [email for email in all_read_emails if is_desired_domain(email.sender.email_address, desired_domains)]
-#process_email_attachments(filtered_read_emails)
+filtered_read_emails = [email for email in all_read_emails if
+                        is_desired_domain(email.sender.email_address, desired_domains)]
+# process_email_attachments(filtered_read_emails)
 
 
 
