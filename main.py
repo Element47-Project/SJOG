@@ -203,7 +203,7 @@ def get_all_table_columns(connection_string):
 
 
 def upload_dataframe_to_azure_sql(df, table_name, connection_string):
-    insert_query = ""  # Initialize insert_query to an empty string
+    #insert_query = ""  # Initialize insert_query to an empty string
     # Connect to the Azure SQL database
     with pyodbc.connect(connection_string) as conn:
         cursor = conn.cursor()
@@ -222,7 +222,14 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
             # Clean the data - convert NaN to None
             cleaned_data = [None if pd.isnull(item) else item for item in row]
             # Execute the query with cleaned data
-            cursor.execute(insert_query, cleaned_data)
+            #cursor.execute(insert_query, cleaned_data)
+            try:
+                # Execute the query with cleaned data
+                cursor.execute(insert_query, cleaned_data)
+            except pyodbc.IntegrityError as e:
+                # Handle primary key conflict
+                print(f"Skipping row due to primary key conflict: {e}")
+                continue  # Skip this row and continue with the next row
         # Commit the transaction
         conn.commit()
     print('THE DATA IS SUCCESSFULLY UPLOADED.')
