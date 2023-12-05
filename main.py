@@ -10,6 +10,7 @@ import pyodbc
 import openpyxl
 
 
+#print("Script started")
 load_dotenv()
 #email account
 password =  os.environ.get('password')
@@ -59,6 +60,7 @@ def process_email_attachments(attachment_files):
         if (item.attachments):
             attachements = item.attachments
             for attachment in attachements:
+                #print(f"Processing attachment: {attachment.name}")
                 (filename,extension) = os.path.splitext(attachment.name)
                 if (extension == '.xlsx' or extension == '.xls') and isinstance(attachment, FileAttachment):   # Ensure it's a FileAttachment type
                     try:
@@ -201,8 +203,28 @@ def get_all_table_columns(connection_string):
     return tables_columns
 
 
+def batch_insert(cursor, insert_query, data, batch_size):
+    for start in range(0, len(data), batch_size):
+        end = start + batch_size
+        batch = data[start:end]
+        
+        # Clean the data in the batch (convert NaN to None)
+        cleaned_batch = [tuple(None if pd.isnull(item) else item for item in row) for row in batch]
+        
+        try:
+            cursor.executemany(insert_query, cleaned_batch)
+        except pyodbc.Error as e:
+            if batch_size > 1:
+                # Retry with smaller batch size
+                print(f"Batch insert failed, retrying with smaller batches: {e}")
+                batch_insert(cursor, insert_query, batch, batch_size // 2)
+            else:
+                # Handle individual row error
+                print(f"Error inserting row: {e}")
+
 
 def upload_dataframe_to_azure_sql(df, table_name, connection_string):
+    print(f"Uploading data to {table_name}")
     #insert_query = ""  # Initialize insert_query to an empty string
     # Connect to the Azure SQL database
     with pyodbc.connect(connection_string) as conn:
@@ -216,26 +238,28 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
         
         # SQL INSERT statement
         insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
-        # print("SQL Insert Query:", insert_query)
-        # Iterate over DataFrame rows as tuples
-        for row in df.itertuples(index=False, name=None):
-            # Clean the data - convert NaN to None
-            cleaned_data = [None if pd.isnull(item) else item for item in row]
-            # Execute the query with cleaned data
-            #cursor.execute(insert_query, cleaned_data)
-            try:
-                # Execute the query with cleaned data
-                cursor.execute(insert_query, cleaned_data)
-            except pyodbc.IntegrityError as e:
+        
+        # Prepare data for batch insert
+        data_for_insert = [tuple(row) for row in df.itertuples(index=False, name=None)]
+        
+        try:
+                  # Perform batch insert
+            batch_insert(cursor, insert_query, data_for_insert, len(data_for_insert))
+            conn.commit()
+            print('Batch data successfully uploaded.')
+        except pyodbc.Error as e:
+            print(f"Error during batch insert: {e}")
+            conn.rollback()
                 # Handle primary key conflict
-                print(f"Skipping row due to primary key conflict: {e}")
-                continue  # Skip this row and continue with the next row
+                #print(f"Skipping row due to primary key conflict: {e}")
+                #continue 
         # Commit the transaction
-        conn.commit()
+        # conn.commit()
     print('THE DATA IS SUCCESSFULLY UPLOADED.')
     
 # fetch unread files
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
+# print(f"Unread emails count: {all_unread_emails.count()}")
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if is_desired_domain(email.sender.email_address, desired_domains)]
 process_email_attachments(filtered_unread_emails) 
