@@ -255,7 +255,7 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
                 #continue 
         # Commit the transaction
         # conn.commit()
-    print('THE DATA IS SUCCESSFULLY UPLOADED.')
+print('THE DATA IS SUCCESSFULLY UPLOADED.')
     
 # fetch unread files
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
