@@ -110,7 +110,7 @@ def process_email_attachments(attachment_files):
                           
                           upload_dataframe_to_azure_sql(batch_df, table_name, connection_string)
                           start_row += chunk_size
-
+                          print('THE DATA IS SUCCESSFULLY UPLOADED.')
                          
 
                         item.is_read = True
@@ -247,7 +247,7 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
                   # Perform batch insert
             batch_insert(cursor, insert_query, data_for_insert, len(data_for_insert))
             conn.commit()
-            print('Batch data successfully uploaded.')
+            #print('Batch data successfully uploaded.')
         except pyodbc.Error as e:
             print(f"Error during batch insert: {e}")
             conn.rollback()
@@ -256,7 +256,7 @@ def upload_dataframe_to_azure_sql(df, table_name, connection_string):
                 #continue 
         # Commit the transaction
         # conn.commit()
-print('THE DATA IS SUCCESSFULLY UPLOADED.')
+
     
 # fetch unread files
 all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
