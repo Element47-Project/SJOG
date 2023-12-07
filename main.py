@@ -8,10 +8,16 @@ import camelot
 import time
 import pyodbc
 import pickle
-import datetime
+#import datetime
 import pytz
 import ntplib
 from time import ctime
+
+import openmeteo_requests
+import requests_cache
+from retry_requests import retry
+from datetime import datetime as dt
+
 
 load_dotenv()
 # email account
@@ -202,7 +208,7 @@ all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_rece
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if
                           is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails)
+#process_email_attachments(filtered_unread_emails)
 
 # fetch read files
 all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
@@ -267,4 +273,75 @@ filtered_read_emails = [email for email in all_read_emails if
 # upload the file on Azure
 # Daily temperature data
 
+
+# Setup the Open-Meteo API client with cache and retry on error
+cache_session = requests_cache.CachedSession('.cache', expire_after = -1)
+retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+openmeteo = openmeteo_requests.Client(session = retry_session)
+
+# Define the start and end dates for the data fetching
+start_date = "2023-12-01"
+end_date = dt.now().strftime("%Y-%m-%d")  # Gets the current date
+
+# Make sure all required weather variables are listed here
+# The order of variables in hourly or daily is important to assign them correctly below
+url = "https://archive-api.open-meteo.com/v1/archive"
+params = {
+	"latitude": -31.9522,
+	"longitude": 115.8614,
+	"start_date": start_date,
+	"end_date": end_date,
+	"hourly": "temperature_2m",
+    "timezone": "auto"
+}
+responses = openmeteo.weather_api(url, params=params)
+
+# Process first location. Add a for-loop for multiple locations or weather models
+response = responses[0]
+print(f"Coordinates {response.Latitude()}°E {response.Longitude()}°N")
+print(f"Elevation {response.Elevation()} m asl")
+print(f"Timezone {response.Timezone()} {response.TimezoneAbbreviation()}")
+print(f"Timezone difference to GMT+0 {response.UtcOffsetSeconds()} s")
+
+# Process hourly data. The order of variables needs to be the same as requested.
+hourly = response.Hourly()
+hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
+
+hourly_data = {"date": pd.date_range(
+	start = pd.to_datetime(hourly.Time(), unit = "s"),
+	end = pd.to_datetime(hourly.TimeEnd(), unit = "s"),
+	freq = pd.Timedelta(seconds = hourly.Interval()),
+	inclusive = "left"
+)}
+hourly_data["temperature_2m"] = hourly_temperature_2m
+""" hourly_dataframe = pd.DataFrame(data = hourly_data)
+print(hourly_dataframe) """
+
+def upload_temperature_to_azure_sql(df, table_name, connection_string):
+    # Connect to the Azure SQL database
+    with pyodbc.connect(connection_string) as conn:
+        cursor = conn.cursor()
+
+        # Modify this part based on the column names of your Azure table
+        df_columns = ['Date_time', 'Temperature']  # Update with actual column names
+        sql_columns = ', '.join([f'[{col}]' for col in df_columns])
+        placeholders = ', '.join(['?'] * len(df_columns))
+        insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
+
+        for row in df.itertuples(index=False, name=None):
+            cleaned_data = [None if pd.isnull(item) else item for item in row]
+            try:
+                cursor.execute(insert_query, cleaned_data)
+            except pyodbc.IntegrityError as e:
+                # Handle primary key conflict
+                print(f"Skipping row due to primary key conflict: {e}")
+                continue  # Skip this row and continue with the next row
+
+        conn.commit()
+
+
+df_weather = pd.DataFrame(data=hourly_data)
+table_name = 'Temperature_hourly'
+# Upload the data to Azure
+upload_temperature_to_azure_sql(df_weather, table_name, connection_string)
 
