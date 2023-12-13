@@ -5,10 +5,11 @@ from exchangelib import Credentials,Account,DELEGATE,FileAttachment
 import pandas as pd
 import io
 import xlrd
-import camelot
+#import camelot
 import time
 import pyodbc
 import openpyxl
+import pdfplumber
 
 
 #print("Script started")
@@ -61,7 +62,9 @@ def process_email_attachments(attachment_files):
         if (item.attachments):
             attachements = item.attachments
             for attachment in attachements:
-                #print(f"Processing attachment: {attachment.name}")
+                
+                print(f"Processing attachment: {attachment.name}")
+                
                 (filename,extension) = os.path.splitext(attachment.name)
                 if (extension == '.xlsx' or extension == '.xls') and isinstance(attachment, FileAttachment):   # Ensure it's a FileAttachment type
                     try:
@@ -127,19 +130,35 @@ def process_email_attachments(attachment_files):
                         # You can add code here to upload to Azure
                         item.is_read = True
 
-                elif extension == '.pdf':
-                        # Handle PDF files
-                        try:
-                            # Extract filename without extension to use as a basis for the PDF file                       
-                            pdf_filename = f"{filename}.pdf"
-                            tables = process_pdf_tables(io.BytesIO(attachment.content), filename=pdf_filename)
-                            for i, table in enumerate(tables):
-                                print(f"Table {i} from {pdf_filename}:")
-                                print(table)
-                                 # You can add code here to upload to Azure or handle the DataFrame as needed
-                        except Exception as e:
-                            print(f"Error processing PDF tables in file: {pdf_filename}. Error: {e}")
-                        item.is_read = True
+                elif extension == '.pdf' and isinstance(attachment, FileAttachment):
+                    
+                    try:
+                        pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
+                        for pdf_df in pdf_dataframes:
+
+                            pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
+                            
+                            header_row_index = None
+                            
+                            for i in range(min(30, len(pdf_df))):  # Search in the first 30 rows
+                                for table_name, azure_columns in all_tables_columns.items():
+                                    #print(f"Expected columns for {table_name}: {azure_columns}")
+                                    row_values_set = set(pdf_df.iloc[i].dropna().astype(str))
+                                    expected_columns_set = set(azure_columns)
+                                    if row_values_set == expected_columns_set:
+                                       header_row_index = i
+                                       pdf_df.columns = pdf_df.iloc[header_row_index].tolist()  # Set column names
+                                       data_start_row = header_row_index + 1  # Start processing data from next row
+                                       upload_dataframe_to_azure_sql(pdf_df[data_start_row:], table_name, connection_string)
+                                       print("Data uploaded successfully to Azure SQL.")
+                                       break
+                                if header_row_index is not None:
+                                    break
+                            if header_row_index is None:
+                               print(f"No matching header found in first 30 rows of PDF file: {attachment.name}")
+                    except Exception as e:
+                        print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")   
+                    item.is_read = True
                 else:
                     pass
                 # Mark the item as read after processing
@@ -165,10 +184,25 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
     # Save the PDF to the specified directory
     with open(file_path, "wb") as f:
         f.write(attachment_content.read())
-    # Now read the PDF with Camelot
-    tables = camelot.read_pdf(file_path, flavor='stream', pages='all')
-    # Convert tables to DataFrames
-    dataframes = [table.df for table in tables]
+
+    dataframes = []
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            # Extract table from the page
+            table = page.extract_table()
+            if table:
+                # Convert table (list of lists) to DataFrame
+                df = pd.DataFrame(table[1:], columns=table[0])
+                dataframes.append(df)
+
+    
+    print(f"Number of tables extracted: {len(dataframes)}")
+
+    
+    for i, df in enumerate(dataframes):
+        print(f"Preview of table {i}:")
+        print(df.head())  # Print first few rows of each table
+
     # Optionally, you can delete the PDF file after processing
     # os.remove(file_path)
     return dataframes
@@ -187,7 +221,13 @@ def find_header_row(df, expected_columns):
         # expected_columns_set = set(column.lower() for column in expected_columns)
 
         if row_values_set == expected_columns_set:
+
+            print(f"Matching header row found at index: {i}")
+
             return i
+        
+    print("No matching header row found.")   
+
     return None
 
 
