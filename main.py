@@ -10,6 +10,9 @@ import time
 import pyodbc
 import openpyxl
 import pdfplumber
+from fuzzywuzzy import process
+from datetime import datetime
+
 
 
 #print("Script started")
@@ -47,6 +50,10 @@ def get_total_rows(excel_stream):
     workbook = openpyxl.load_workbook(excel_stream, read_only=True)
     first_sheet = workbook.worksheets[0]
     return first_sheet.max_row
+
+def find_best_match(header, choices, threshold=95):
+    best_match, score = process.extractOne(header, choices)
+    return best_match if score >= threshold else None
 
 #check the extension of the attachment file
 #read the attachments
@@ -135,10 +142,23 @@ def process_email_attachments(attachment_files):
                     try:
                         pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
                         for pdf_df in pdf_dataframes:
-
+                            # Clean column names by replacing newlines and extra spaces
                             pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
-                            
-                            header_row_index = None
+                            #print(f"Expected columns for {table_name}: {azure_columns}")
+
+                            # Implement fuzzy matching here
+                            for col in list(pdf_df.columns):  # Use list to avoid iterating over changing dict
+                                for table_name, azure_columns in all_tables_columns.items():
+                                    best_match = find_best_match(col, azure_columns)
+                                    if best_match:
+                                       pdf_df.rename(columns={col: best_match}, inplace=True)
+
+            # Upload the processed data to Azure SQL
+            # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
+                            upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
+                            print("Data uploaded successfully to Azure SQL.")
+
+                            """ header_row_index = None
                             
                             for i in range(min(30, len(pdf_df))):  # Search in the first 30 rows
                                 for table_name, azure_columns in all_tables_columns.items():
@@ -155,9 +175,9 @@ def process_email_attachments(attachment_files):
                                 if header_row_index is not None:
                                     break
                             if header_row_index is None:
-                               print(f"No matching header found in first 30 rows of PDF file: {attachment.name}")
+                               print(f"No matching header found in first 30 rows of PDF file: {attachment.name}") """
                     except Exception as e:
-                        print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")   
+                            print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")   
                     item.is_read = True
                 else:
                     pass
@@ -193,6 +213,7 @@ def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
             if table:
                 # Convert table (list of lists) to DataFrame
                 df = pd.DataFrame(table[1:], columns=table[0])
+                df.columns = [col.replace('\n', ' ').strip().title() for col in df.columns]  # Clean column names
                 dataframes.append(df)
 
     
@@ -267,6 +288,11 @@ def batch_insert(cursor, insert_query, data, batch_size):
 def upload_dataframe_to_azure_sql(df, table_name, connection_string):
     print(f"Uploading data to {table_name}")
     #insert_query = ""  # Initialize insert_query to an empty string
+      # Convert date columns to the format expected by SQL Server
+    date_columns = ['Read Date']  # Add all date column names here
+    for col in date_columns:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce', dayfirst=True).dt.strftime('%Y-%m-%d')
     # Connect to the Azure SQL database
     with pyodbc.connect(connection_string) as conn:
         cursor = conn.cursor()
