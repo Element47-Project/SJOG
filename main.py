@@ -5,7 +5,6 @@ from exchangelib import Credentials,Account,DELEGATE,FileAttachment
 import pandas as pd
 import io
 import xlrd
-#import camelot
 import time
 import pyodbc
 import openpyxl
@@ -87,10 +86,7 @@ def process_email_attachments(attachment_files):
                             #print(f"Header row index for {table_name}: {header_row_index}")
 
                             if header_row_index is not None:
-                                # Read the full data starting from the header row
-                                #excel_data = pd.read_excel(excel_stream, header=header_row_index)
-                                # Upload to Azure SQL
-                                #upload_dataframe_to_azure_sql(excel_data, table_name, connection_string)
+                                
                                break
 
                         if header_row_index is None:
@@ -153,29 +149,12 @@ def process_email_attachments(attachment_files):
                                     if best_match:
                                        pdf_df.rename(columns={col: best_match}, inplace=True)
 
-            # Upload the processed data to Azure SQL
-            # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
+                            # Upload the processed data to Azure SQL
+                            # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
                             upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
-                            print("Data uploaded successfully to Azure SQL.")
+                            # print("Data uploaded successfully to Azure SQL.")
 
-                            """ header_row_index = None
-                            
-                            for i in range(min(30, len(pdf_df))):  # Search in the first 30 rows
-                                for table_name, azure_columns in all_tables_columns.items():
-                                    #print(f"Expected columns for {table_name}: {azure_columns}")
-                                    row_values_set = set(pdf_df.iloc[i].dropna().astype(str))
-                                    expected_columns_set = set(azure_columns)
-                                    if row_values_set == expected_columns_set:
-                                       header_row_index = i
-                                       pdf_df.columns = pdf_df.iloc[header_row_index].tolist()  # Set column names
-                                       data_start_row = header_row_index + 1  # Start processing data from next row
-                                       upload_dataframe_to_azure_sql(pdf_df[data_start_row:], table_name, connection_string)
-                                       print("Data uploaded successfully to Azure SQL.")
-                                       break
-                                if header_row_index is not None:
-                                    break
-                            if header_row_index is None:
-                               print(f"No matching header found in first 30 rows of PDF file: {attachment.name}") """
+                         
                     except Exception as e:
                             print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")   
                     item.is_read = True
