@@ -7,6 +7,18 @@ import io
 import xlrd
 import time
 import pyodbc
+import pickle
+#import datetime
+import pytz
+import ntplib
+from time import ctime
+
+import openmeteo_requests
+import requests_cache
+from retry_requests import retry
+from datetime import datetime as dt, timedelta
+
+
 import openpyxl
 import pdfplumber
 from fuzzywuzzy import process
@@ -254,6 +266,7 @@ def batch_insert(cursor, insert_query, data, batch_size):
         
         try:
             cursor.executemany(insert_query, cleaned_batch)
+            print('Batch has been processed.')
         except pyodbc.Error as e:
             if batch_size > 1:
                 # Retry with smaller batch size
@@ -308,8 +321,7 @@ all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_rece
 # filter out the emails from the specific domains
 filtered_unread_emails = [email for email in all_unread_emails if
                           is_desired_domain(email.sender.email_address, desired_domains)]
-process_email_attachments(filtered_unread_emails)
-
+#process_email_attachments(filtered_unread_emails)
 
 # fetch read files
 all_read_emails = account.inbox.filter(is_read=True).order_by('-datetime_received')
@@ -374,4 +386,104 @@ filtered_read_emails = [email for email in all_read_emails if
 # upload the file on Azure
 # Daily temperature data
 
+
+# Setup the Open-Meteo API client with cache and retry on error
+cache_session = requests_cache.CachedSession('.cache', expire_after = -1)
+retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+openmeteo = openmeteo_requests.Client(session = retry_session)
+
+
+def fetch_latest_date_from_azure(connection_string, table_name):
+    with pyodbc.connect(connection_string) as conn:
+        cursor = conn.cursor()
+        query = f"SELECT MAX(Date_Time) FROM {table_name}"
+        cursor.execute(query)
+        result = cursor.fetchone()
+        return result[0] if result[0] is not None else None
+
+latest_date = fetch_latest_date_from_azure(connection_string, 'Temperature_hourly')
+# Define the start and end dates for the data fetching
+start_date = (latest_date - timedelta(days=1/3)).strftime("%Y-%m-%d") if latest_date else "2020-01-01"
+end_date = (dt.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+
+
+# Make sure all required weather variables are listed here
+# The order of variables in hourly or daily is important to assign them correctly below
+url = "https://archive-api.open-meteo.com/v1/archive"
+params = {
+	"latitude": -31.9522,
+	"longitude": 115.8614,
+	"start_date": start_date,
+	"end_date": end_date,
+	"hourly": "temperature_2m",
+    "timezone": "auto"
+}
+responses = openmeteo.weather_api(url, params=params)
+
+# Process first location. Add a for-loop for multiple locations or weather models
+response = responses[0]
+print(f"Coordinates {response.Latitude()}°E {response.Longitude()}°N")
+print(f"Elevation {response.Elevation()} m asl")
+print(f"Timezone {response.Timezone()} {response.TimezoneAbbreviation()}")
+print(f"Timezone difference to GMT+0 {response.UtcOffsetSeconds()} s")
+
+# Process hourly data. The order of variables needs to be the same as requested.
+
+# The timezone has been modified in the Power BI by adding extra column(Real time) consisting with Perth local time.
+hourly = response.Hourly()
+hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
+
+hourly_data = {"date": pd.date_range(
+	start = pd.to_datetime(hourly.Time(), unit = "s"),
+	end = pd.to_datetime(hourly.TimeEnd(), unit = "s"),
+	freq = pd.Timedelta(seconds = hourly.Interval()),
+	inclusive = "left"
+)}
+hourly_data["temperature_2m"] = hourly_temperature_2m
+""" hourly_dataframe = pd.DataFrame(data = hourly_data)
+print(hourly_dataframe) """
+
+def upload_temperature_to_azure_sql(df, table_name, connection_string,batch_size=2000):
+    print(f"Uploading data to {table_name}")
+    #insert_query = ""  # Initialize insert_query to an empty string
+    # Connect to the Azure SQL database
+    with pyodbc.connect(connection_string) as conn:
+        cursor = conn.cursor()
+        # Retrieve DataFrame column names
+        df_columns = df.columns.tolist()
+        # Construct SQL column names part for INSERT statement
+        sql_columns = ', '.join([f'[{col}]' for col in df_columns])
+        # Construct placeholders part for INSERT statement
+        placeholders = ', '.join(['?'] * len(df_columns))
+        
+        # SQL INSERT statement
+        insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
+        
+        # Prepare data for batch insert
+        data_for_insert = [tuple(row) for row in df.itertuples(index=False, name=None)]
+        
+        try:
+                  # Perform batch insert
+            batch_insert(cursor, insert_query, data_for_insert, batch_size)
+            conn.commit()
+            #print('Batch data successfully uploaded.')
+        except pyodbc.Error as e:
+            print(f"Error during batch insert: {e}")
+            conn.rollback()
+
+
+def process_temp(df, table_name, connection_string, chunk_size=2000):
+    total_rows = len(df)
+    start_row = 0 
+    while start_row < total_rows:
+        end_row = min(start_row + chunk_size, total_rows)
+        batch_df = df.iloc[start_row:end_row]
+        upload_dataframe_to_azure_sql(batch_df, table_name, connection_string)
+        start_row += chunk_size
+        print('Temperature batch data has been uploaded.')
+
+
+df_weather = pd.DataFrame(data=hourly_data)
+df_weather.columns = ['Date_Time', 'Temperature']
+process_temp(df_weather,'Temperature_hourly',connection_string)
 
