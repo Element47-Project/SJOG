@@ -35,6 +35,17 @@ SETUP
    - AZURE_SQL_PASSWORD
    - EMAIL_ACCOUNT
    - EMAIL_PASSWORD
+  
+AZURE DATA UPLOAD
+Setting up Azure SQL Database:
+To ensure smooth operation of the script, set up your Azure SQL Database with the required tables and schemas:
+1. Database Configuration: Follow the Azure documentation to set up your SQL database.
+2. Required Tables and Schema: Create tables to store email and weather data. Example SQL commands for table creation are provided in the sql_scripts directory.
+
+Uploading Process:
+- The script automatically processes and transforms data from emails and weather sources to fit the Azure SQL schema.
+- Data is uploaded in batches for efficiency and to minimize the load on the server.
+- Error handling mechanisms are in place to address issues such as data format mismatches or network interruptions.
 
 USAGE
 1. Run the Script:
@@ -56,7 +67,9 @@ FUNCTIONALITY OVERVIEW
   - Functions for batch inserts and data uploads.
   - Handles data formatting and column matching.
 
+
 NOTES
 - Ensure that the Azure SQL database has the necessary tables and schema set up.
 - Adjust the email domain filter as per your requirements.
 - Modify the weather data retrieval parameters according to your needs.
+- The data upload takes a bit of time. (For 2000 lines it takes around 10 minutes to upload in Azure).
