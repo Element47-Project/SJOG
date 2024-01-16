@@ -176,6 +176,7 @@ def process_email_attachments(attachment_files):
                                 for table_name, azure_columns in all_tables_columns.items():
                                     best_match = find_best_match(col, azure_columns)
                                     if best_match:
+
                                         pdf_df.rename(columns={col: best_match}, inplace=True)
 
                             # Upload the processed data to Azure SQL
