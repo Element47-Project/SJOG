@@ -176,7 +176,6 @@ def process_email_attachments(attachment_files):
                                 for table_name, azure_columns in all_tables_columns.items():
                                     best_match = find_best_match(col, azure_columns)
                                     if best_match:
-
                                         pdf_df.rename(columns={col: best_match}, inplace=True)
 
                             # Upload the processed data to Azure SQL
@@ -498,3 +497,4 @@ df_weather = pd.DataFrame(data=hourly_data)
 df_weather.columns = ['Date_Time', 'Temperature']
 # Upload temp
 # process_temp(df_weather,'Temperature_hourly',connection_string)
+
