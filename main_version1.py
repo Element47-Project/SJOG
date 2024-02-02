@@ -55,15 +55,10 @@ def get_all_table_columns(cursor):
 def get_all_table_primary_keys(cursor):
     """
     Retrieves all primary key columns for each table in the database.
-    Args:
-        cursor: The cursor object from an active database connection.
-    Returns:
-        A dictionary mapping table names to their primary key columns.
     """
     # Retrieve all base tables
     cursor.execute("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'")
     table_names = [row.TABLE_NAME for row in cursor.fetchall()]
-
     # Dictionary to hold table primary key information
     primary_keys = {}
 
@@ -77,97 +72,59 @@ def get_all_table_primary_keys(cursor):
         """
         cursor.execute(pk_query, [table_name])
         pk_columns = cursor.fetchall()
-
         # Add table primary key info to the dictionary
         primary_keys[table_name] = [col.COLUMN_NAME for col in pk_columns]
     return primary_keys, table_names
 
 
-# def get_last_records_by_primary_key(cur, table, table_dict, records_per_nmi=1):
-#     """
-#     Retrieves the last record(s) based on the primary key(s) from a specified table.
-#     Supports tables with single, composite primary keys, and tables without primary keys.
-#     """
-#     if table not in table_dict or not table_dict[table]:
-#         return "Table does not have primary keys or not found in table dictionary!"
-#
-#     primary_keys = table_dict[table]
-#
-#     if len(primary_keys) == 1:
-#         # Single primary key
-#         query = f"""
-#         SELECT TOP 1 *
-#         FROM [{table}]
-#         ORDER BY [{primary_keys[0]}] DESC
-#         """
-#     elif len(primary_keys) == 2:
-#         query = f"""
-#         WITH RankedRecords AS (
-#             SELECT *, ROW_NUMBER() OVER (PARTITION BY ['NMI'] ORDER BY ['END INTERVAL'] DESC) AS rn
-#             FROM [{table}]
-#         )
-#         SELECT *
-#         FROM RankedRecords
-#         WHERE rn <= {records_per_nmi}
-#         """
-#     else:
-#         # Other composite primary keys or unsupported configurations
-#         return "Table has a composite primary key that is not supported by this function!"
-#
-#     cur.execute(query)
-#     rows = cur.fetchall()
-#
-#     if rows:
-#         column_names = [desc[0] for desc in cur.description]
-#         return [dict(zip(column_names, row)) for row in rows]
-#     else:
-#         return None
-
-
 def find_header_row(df, expected_columns):
+    """
+    Finds the header row index in a DataFrame by matching it to expected column names.
+    """
     expected_columns_set = set(expected_columns)
+
     for i, row in df.iterrows():
-        # Extract non-null values from the row and convert them to a set
+        # Extract non-null values from the row
         row_values_set = set(row.dropna())
-
-        # Optionally convert to the same case for case-insensitive comparison
-        # row_values_set = set(value.lower() for value in row.dropna())
-        # expected_columns_set = set(column.lower() for column in expected_columns)
-
         if row_values_set == expected_columns_set:
             print(f"Matching header row found at index: {i}")
             return i
-
     return None
 
 
-def process_xlsx_attachments(attachment, table_dict, cursor, conn, all_tables_columns):
+def process_xlsx_attachments(attachment, table_dict, cursor, conn):
+    all_tables_columns = get_all_table_columns(cursor)
     try:
+        # Open the workbook in memory
         excel_stream = io.BytesIO(attachment.content)
         workbook = openpyxl.load_workbook(excel_stream, read_only=True)
 
-        # Reset stream to the beginning after getting total rows
-        excel_stream.seek(0)
-
+        excel_stream.seek(0)  # Ensure we are at the beginning of the stream
+        first_sheet = workbook[workbook.sheetnames[0]]  # Use the first sheet to identify header and table
+        temp_df = pd.DataFrame(first_sheet.iter_rows(values_only=True, max_row=20))
         header_row_index = None
         upload_table = None
-        # Compare with all table column names to find header row index
-        temp_df = pd.read_excel(excel_stream, header=None, nrows=20)
         for table_name, azure_columns in all_tables_columns.items():
             header_row_index = find_header_row(temp_df, azure_columns)
             if header_row_index is not None:
                 upload_table = table_name
-                # Break if we find a matching header
-                break
+                break  # Found a matching header, break out of the loop
 
-        # If header_row_index is None, the header was not found
-        if header_row_index is None:
-            print(f"Header row not found in the Excel file {attachment.name}")
+        # If header_row_index or table name not found, return or raise an exception
+        if header_row_index is None or upload_table is None:
+            print(f"Header row or table name not found in the Excel file {attachment.name}")
             return
-        batch_df = pd.read_excel(excel_stream, skiprows=header_row_index)
-        batch_df.columns = temp_df.iloc[header_row_index]
-        # Process the Excel file in chunks
-        upload_dataframe_to_azure_sql(batch_df, upload_table, cursor, table_dict, conn)
+
+        # Process each sheet using the found header row index and table name
+        for sheet_name in workbook.sheetnames:
+            excel_stream.seek(0)  # Reset the stream to the beginning for each sheet
+
+            # Read the entire sheet starting from the header row index
+            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=header_row_index)
+            batch_df.columns = temp_df.iloc[header_row_index].values  # Set the correct header
+
+            # Upload the DataFrame to the database
+            upload_dataframe_to_azure_sql(batch_df, upload_table, cursor, table_dict, conn)
 
     except xlrd.biffh.XLRDError as e:
         if str(e) == "Workbook is encrypted":
@@ -196,53 +153,44 @@ def process_csv_attachments(attachment, table_dict, cursor, conn):
 
 
 def process_pdf_attachments(attachment, table_dict, cursor, conn):
+    #     try:
+    #         pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
+    #         for pdf_df in pdf_dataframes:
+    #             # Clean column names by replacing newlines and extra spaces
+    #             pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
+    #             # print(f"Expected columns for {table_name}: {azure_columns}")
+    #
+    #             # Implement fuzzy matching here
+    #             for col in list(pdf_df.columns):  # Use list to avoid iterating over changing dict
+    #                 for table_name, azure_columns in all_tables_columns.items():
+    #                     best_match = find_best_match(col, azure_columns)
+    #                     if best_match:
+    #                         pdf_df.rename(columns={col: best_match}, inplace=True)
+    #
+    #             # Upload the processed data to Azure SQL
+    #             # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
+    #             upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
+    #             # print("Data uploaded successfully to Azure SQL.")
+    #     except Exception as e:
+    #         print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")
+    #     item.is_read = True
     pass
 
 
 def process_email_attachments(cursor, attachment_files, table_dict, conn):
-    all_tables_columns = get_all_table_columns(cursor)
-    """ for table, columns in all_tables_columns.items():
-        print(f"Table: {table}, Columns: {columns}") """
     for item in attachment_files:
-        # print("Attachments in the email:", len(item.attachments))
         if item.attachments:
-            attachments = item.attachments
-            for attachment in attachments:
-
+            for attachment in item.attachments:
                 print(f"Processing attachment: {attachment.name}")
+                filename, extension = os.path.splitext(attachment.name)
+                if isinstance(attachment, FileAttachment):
+                    if extension in ['.xlsx', '.xls']:
+                        process_xlsx_attachments(attachment, table_dict, cursor, conn)
+                    elif extension == '.csv':
+                        process_csv_attachments(attachment, table_dict, cursor, conn)
+                    elif extension == '.pdf':
+                        process_pdf_attachments(attachment, table_dict, cursor, conn)
 
-                (filename, extension) = os.path.splitext(attachment.name)
-                if (extension == '.xlsx' or extension == '.xls') and isinstance(attachment, FileAttachment):
-                    process_xlsx_attachments(attachment, table_dict, cursor, conn, all_tables_columns)
-
-                elif extension == '.csv' and isinstance(attachment, FileAttachment):
-                    process_csv_attachments(attachment, table_dict, cursor, conn)
-
-                elif extension == '.pdf' and isinstance(attachment, FileAttachment):
-                    process_pdf_attachments(attachment, table_dict, cursor, conn)
-                #     try:
-                #         pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
-                #         for pdf_df in pdf_dataframes:
-                #             # Clean column names by replacing newlines and extra spaces
-                #             pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
-                #             # print(f"Expected columns for {table_name}: {azure_columns}")
-                #
-                #             # Implement fuzzy matching here
-                #             for col in list(pdf_df.columns):  # Use list to avoid iterating over changing dict
-                #                 for table_name, azure_columns in all_tables_columns.items():
-                #                     best_match = find_best_match(col, azure_columns)
-                #                     if best_match:
-                #                         pdf_df.rename(columns={col: best_match}, inplace=True)
-                #
-                #             # Upload the processed data to Azure SQL
-                #             # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
-                #             upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
-                #             # print("Data uploaded successfully to Azure SQL.")
-                #     except Exception as e:
-                #         print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")
-                #     item.is_read = True
-                else:
-                    pass
                 # Mark the item as read after processing
                 item.is_read = True
 
@@ -262,88 +210,57 @@ def upload_temperature_to_azure_sql(df, table_name, conn_str, batch_size=2000):
 
 def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
     print(f"Uploading data to {table_name}...")
-    if table_name not in table_dict or not table_dict[table_name]:
-        print("Table does not have primary keys or not found in table dictionary.")
-        return
-
     primary_keys = table_dict[table_name]
-    print(primary_keys)
-    query = ""
+
     if len(primary_keys) == 1:
-        # Handle single primary key
-        query = f"SELECT TOP 1 * FROM [{table_name}] ORDER BY [{primary_keys[0]}] DESC"
-    elif len(primary_keys) > 1:
-        query = f"""
-        WITH RankedRecords AS (
-            SELECT *, ROW_NUMBER() OVER (PARTITION BY [NMI] ORDER BY [END INTERVAL] DESC) AS rn
-            FROM [{table_name}]
-        )
-        SELECT * FROM RankedRecords WHERE rn = 1
-        """
-    else:
-        print("Unsupported primary key configuration.")
-        return
-
-    cursor.execute(query)
-    last_records = cursor.fetchall()
-    print(last_records)
-    column_names = [desc[0] for desc in cursor.description] if cursor.description else []
-    last_records_dicts = [dict(zip(column_names, row)) for row in last_records]
-
-    if not last_records_dicts:
-        print("No last records found. Uploading all data.")
-    else:
-        if len(primary_keys) == 1:
-            pk_col = primary_keys[0]
-            last_value = last_records_dicts[0][pk_col]
+        # Single primary key scenario
+        pk_col = primary_keys[0]
+        cursor.execute(f"SELECT TOP 1 [{pk_col}] FROM [{table_name}] ORDER BY [{pk_col}] DESC")
+        last_record = cursor.fetchone()
+        last_value = last_record[0] if last_record else None
+        if last_value is not None:
             df = df[df[pk_col] > last_value]
-        elif len(primary_keys) > 1:
-            for record in last_records_dicts:
-                df = df[(df['NMI'] == record['NMI']) & (df['END INTERVAL'] > record['END INTERVAL'])]
-                print(df)
+
+    elif len(primary_keys) == 2:
+        cursor.execute(f"""
+                SELECT [NMI], MAX([END INTERVAL]) 
+                FROM [{table_name}] 
+                GROUP BY [NMI]
+                """)
+        last_records = {nmi: max_end_interval for nmi, max_end_interval in cursor.fetchall()}
+        # Filter the DataFrame based on the last_records
+        df = df[df.apply(lambda row: (row['NMI'] not in last_records) or (row['END INTERVAL']
+                                                                          > last_records[row['NMI']]), axis=1)]
 
     if df.empty:
         print("No new rows to insert after filtering with last records.")
         return
+    print(df)
+    # Perform batch insert
+    data_for_insert = [tuple(None if pd.isnull(item) else item for item in row) for row in df.to_records(index=False)]
+    batch_insert(cursor, table_name, df.columns.tolist(), data_for_insert, conn)
 
-    # Define the SQL INSERT query
-    df_columns = df.columns.tolist()
-    sql_columns = ', '.join([f"[{col}]" for col in df_columns])
-    placeholders = ', '.join(['?'] * len(df_columns))
+
+def batch_insert(cursor, table_name, columns, data, conn, batch_size=1000):
+    """
+    Inserts data into a database in batches.
+    """
+    sql_columns = ', '.join([f'[{col}]' for col in columns])
+    placeholders = ', '.join(['?'] * len(columns))
     insert_query = f"INSERT INTO [{table_name}] ({sql_columns}) VALUES ({placeholders})"
 
-    # Convert DataFrame to list of tuples
-    data_for_insert = [tuple(x) for x in df.to_numpy()]
-    batch_insert(cursor, insert_query, data_for_insert, conn)
-
-
-def batch_insert(cursor, insert_query, data, conn, batch_size=1000):
-    """
-    Inserts data into a database in batches. Adjusts batch size and retries if a batch fails.
-    """
     for start in range(0, len(data), batch_size):
         batch = data[start:start + batch_size]
         try:
             cursor.executemany(insert_query, batch)
             conn.commit()
-            print(f'Batch {start//batch_size + 1} has been processed.')
+            print(f'Batch {start//batch_size + 1}/{(len(data) + batch_size - 1) // batch_size} processed.')
         except pyodbc.Error as e:
-            print(f"Error occurred: {e}")
+            print(f"Error occurred in batch {start//batch_size + 1}: {e}")
             conn.rollback()
-            if batch_size > 50:
-                # Retry with smaller batch size if not already at the minimum size
-                print(f"Batch insert failed, retrying with smaller batches.")
-                new_batch_size = max(batch_size // 2, 50)  # Ensure batch size does not go below 50
-                batch_insert(cursor, insert_query, batch, conn, new_batch_size)
-            else:
-                # If batch size is already at the minimum, attempt to insert row by row
-                for row in batch:
-                    try:
-                        cursor.execute(insert_query, row)
-                        conn.commit()
-                    except pyodbc.Error as e:
-                        print(f"Row insert failed: {e}")
-                        conn.rollback()
+            if batch_size > 100:
+                smaller_batch_size = max(batch_size // 2, 100)
+                batch_insert(cursor, table_name, columns, batch, conn, smaller_batch_size)
 
 
 def main():
