@@ -73,7 +73,8 @@ def get_all_table_primary_keys(cursor):
         pk_query = """
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = ? AND OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
+            WHERE TABLE_NAME = ? AND 
+            OBJECTPROPERTY(OBJECT_ID(CONSTRAINT_SCHEMA + '.' + CONSTRAINT_NAME), 'IsPrimaryKey') = 1
             ORDER BY ORDINAL_POSITION
         """
         cursor.execute(pk_query, [table_name])
@@ -93,7 +94,7 @@ def find_header_row(df, expected_columns):
         # Extract non-null values from the row
         row_values_set = set(row.dropna())
         if row_values_set == expected_columns_set:
-            print(f"Matching header row found at index: {i}")
+            print(f"Matching Header Row Found at Index: {i}")
             return i
     return None
 
@@ -118,7 +119,7 @@ def process_xlsx_attachments(attachment, table_dict, cursor, conn):
 
         # If header_row_index or table name not found, return or raise an exception
         if header_row_index is None or upload_table is None:
-            print(f"Header row or table name not found in the Excel file {attachment.name}")
+            print(f"Header Row or Table Name not Found in the Excel File {attachment.name}")
             return
 
         # Process each sheet using the found header row index and table name
@@ -242,7 +243,7 @@ def process_email_attachments(cursor, attachment_files, table_dict, conn):
 
 
 def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
-    print(f"Uploading data to {table_name}. Please wait...")
+    print(f"Uploading Data to {table_name}. Please Wait...")
     primary_keys = table_dict[table_name]
 
     if len(primary_keys) == 1:
@@ -269,7 +270,7 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
             filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
         df = filtered_df
     if df.empty:
-        print("No new rows to insert after filtering with last records.")
+        print("No New Rows to Insert After Filtering with Last Records.")
         return
 
     # Perform batch insert
@@ -341,12 +342,9 @@ def process_weather_data(weather_data):
     return df_weather
 
 
-def upload_temperature_to_azure_sql(df, table_name, conn, cursor, batch_size=2000):
-    print(f"Uploading data to {table_name}")
+def upload_temperature_to_azure_sql(df, table_name, conn, cursor):
+    print(f"Uploading Data to {table_name}")
     df_columns = df.columns.tolist()
-    sql_columns = ', '.join([f'[{col}]' for col in df_columns])
-    placeholders = ', '.join(['?'] * len(df_columns))
-    insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
     data_for_insert = [tuple(row) for row in df.itertuples(index=False, name=None)]
     try:
         # Perform batch insert
@@ -368,7 +366,7 @@ def main():
         access_type=DELEGATE
     )
     conn, cursor = connect_to_db(CONNECTION_STRING)
-    print("Connected. Loading the information from Database...")
+    print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
     # Process unread emails
     all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
@@ -380,27 +378,24 @@ def main():
     process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
 
     # Upload the Temperature data
-    tem_input = input("Do you want to upload the temperature data to Azure SQL? (Y to continue / N to stop): ")
-    if tem_input == 'Y' or 'y' or '':
-        table_name = 'Temperature_hourly'
-        latest_date = fetch_latest_date_from_azure(cursor, table_name)
-        if latest_date:
-            start_date = (latest_date - timedelta(days=1 / 3)).strftime("%Y-%m-%d")
-        else:
-            start_date = "2020-01-01"  # Default start date if no latest date is available
-        end_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
-        latitude = -31.9522
-        longitude = 115.8614
-        weather_data = fetch_weather_data(latitude, longitude, start_date, end_date)
-
-        if weather_data:
-            df_weather = process_weather_data(weather_data)
-            upload_temperature_to_azure_sql(df_weather, table_name, conn, cursor)
-            print("Weather data upload complete.")
-        else:
-            print("Failed to fetch weather data.")
+    print("Uploading the Recent Temperature to Azure. Please Wait..")
+    table_name = 'Temperature_hourly'
+    latest_date = fetch_latest_date_from_azure(cursor, table_name)
+    if latest_date:
+        start_date = (latest_date - timedelta(days=1 / 3)).strftime("%Y-%m-%d")
     else:
-        print("Process is closing.")
+        start_date = "2020-01-01"  # Default start date if no latest date is available
+    end_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+    latitude = -31.9522
+    longitude = 115.8614
+    weather_data = fetch_weather_data(latitude, longitude, start_date, end_date)
+
+    if weather_data:
+        df_weather = process_weather_data(weather_data)
+        upload_temperature_to_azure_sql(df_weather, table_name, conn, cursor)
+        print("Weather Data Upload Complete.")
+    else:
+        print("No New Temperature Data. Processing is closing.")
 
     # Upload the time into SQL table 'last_read_time'
     now = datetime.now()
