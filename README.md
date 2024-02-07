@@ -63,13 +63,15 @@ FUNCTIONALITY OVERVIEW
   - Fetches historical weather data using Open-Meteo API.
   - Processes and uploads this data to Azure SQL.
 
-4. Database Operations:
+3. Database Operations:
   - Functions for batch inserts and data uploads.
   - Handles data formatting and column matching.
 
 
 NOTES
 - Ensure that the Azure SQL database has the necessary tables and schema set up.
+- The tables should consistent with the files format.
+- Once the tables cannot meet the file format, Please inform and contact Element47 to update the python code.
 - Adjust the email domain filter as per your requirements.
 - Modify the weather data retrieval parameters according to your needs.
-- The data upload takes a bit of time. (For 2000 lines it takes around 10 minutes to upload in Azure).
+- The data upload takes time. (For 1000 lines it takes around 5-7 minutes to upload in Azure). Please wait when the console shows 'Uploading Data'.
