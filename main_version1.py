@@ -3,24 +3,30 @@ import io
 import pandas as pd
 import pyodbc
 from dotenv import load_dotenv
+import time
 from exchangelib import Credentials, Account, DELEGATE, FileAttachment
 import openpyxl
 import xlrd
 from Gas_csv_Formatting import consumption
 from fuzzywuzzy import process
 import pdfplumber
-
-# Local imports
-import openmeteo_requests
-import requests_cache
+import requests
 from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
-
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
-# Constants
+''' The PDF file path configuration. Written by Prachi'''
+# Get the path for this script to save pdfs
+script_path = __file__
+# To get the absolute path to the script file, use abspath
+absolute_script_path = os.path.abspath(__file__)
+# To get the directory containing the script, use dir name
+script_dir = os.path.dirname(absolute_script_path)
+pdf_dir = script_dir + '/pdfs'
 PDF_DIR = '/pdfs'
+
+# All settings in the .env file, including SQL and Email information.
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
 DESIRED_DOMAINS = ['@gmail.com']
 PASSWORD = os.environ.get('PASSWORD')
 SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
@@ -152,29 +158,69 @@ def process_csv_attachments(attachment, table_dict, cursor, conn):
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict, conn)
 
 
+def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
+    # Ensure the directory exists
+    if not os.path.isdir(directory):
+        os.makedirs(directory, exist_ok=True)
+    # If no filename is given, generate one with a timestamp
+    if filename is None:
+        filename = f"pdf_table_{int(time.time())}.pdf"
+    file_path = os.path.join(directory, filename)
+    # Save the PDF to the specified directory
+    with open(file_path, "wb") as f:
+        f.write(attachment_content.read())
+
+    dataframes = []
+    with pdfplumber.open(file_path) as pdf:
+        for page in pdf.pages:
+            # Extract table from the page
+            table = page.extract_table()
+            if table:
+                # Convert table (list of lists) to DataFrame
+                df = pd.DataFrame(table[1:], columns=table[0])
+                df.columns = [col.replace('\n', ' ').strip().title() for col in df.columns]  # Clean column names
+                dataframes.append(df)
+
+    print(f"Number of tables extracted: {len(dataframes)}")
+
+    for i, df in enumerate(dataframes):
+        print(f"Preview of table {i}:")
+        print(df.head())  # Print first few rows of each table
+
+    # Optionally, you can delete the PDF file after processing
+    # os.remove(file_path)
+    return dataframes
+
+
 def process_pdf_attachments(attachment, table_dict, cursor, conn):
-    #     try:
-    #         pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
-    #         for pdf_df in pdf_dataframes:
-    #             # Clean column names by replacing newlines and extra spaces
-    #             pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
-    #             # print(f"Expected columns for {table_name}: {azure_columns}")
-    #
-    #             # Implement fuzzy matching here
-    #             for col in list(pdf_df.columns):  # Use list to avoid iterating over changing dict
-    #                 for table_name, azure_columns in all_tables_columns.items():
-    #                     best_match = find_best_match(col, azure_columns)
-    #                     if best_match:
-    #                         pdf_df.rename(columns={col: best_match}, inplace=True)
-    #
-    #             # Upload the processed data to Azure SQL
-    #             # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
-    #             upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
-    #             # print("Data uploaded successfully to Azure SQL.")
-    #     except Exception as e:
-    #         print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")
-    #     item.is_read = True
-    pass
+    filename = attachment.name.rsplit('.', 1)[0]
+    all_tables_columns = get_all_table_columns(conn)
+    try:
+        pdf_dataframes = process_pdf_tables(io.BytesIO(attachment.content), filename=f"{filename}.pdf")
+        for pdf_df in pdf_dataframes:
+            # Clean column names by replacing newlines and extra spaces
+            pdf_df.columns = [col.replace('\n', ' ').strip().title() for col in pdf_df.columns]
+            # print(f"Expected columns for {table_name}: {azure_columns}")
+            table_name = ""
+            # Implement fuzzy matching here
+            for col in list(pdf_df.columns):  # Use list to avoid iterating over changing dict
+                for table_name, azure_columns in all_tables_columns.items():
+                    best_match = find_best_match(col, azure_columns)
+                    if best_match:
+                        pdf_df.rename(columns={col: best_match}, inplace=True)
+                        return table_name
+
+            # Upload the processed data to Azure SQL
+            # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
+            upload_dataframe_to_azure_sql(pdf_df, table_name, cursor, table_dict, conn)
+            # print("Data uploaded successfully to Azure SQL.")
+    except Exception as e:
+        print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")
+
+
+def find_best_match(header, choices, threshold=95):
+    best_match, score = process.extractOne(header, choices)
+    return best_match if score >= threshold else None
 
 
 def process_email_attachments(cursor, attachment_files, table_dict, conn):
@@ -195,21 +241,8 @@ def process_email_attachments(cursor, attachment_files, table_dict, conn):
                 item.is_read = True
 
 
-def upload_temperature_to_azure_sql(df, table_name, conn_str, batch_size=2000):
-    """
-    Uploads temperature data to the Azure SQL database.
-    Args:
-        df: The pandas DataFrame containing temperature data.
-        table_name: The name of the destination table in the database.
-        conn_str: The database connection string.
-        batch_size: The size of the data batches to upload.
-    """
-    # Your existing upload_temperature_to_azure_sql function code goes here.
-    # ...
-
-
 def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
-    print(f"Uploading data to {table_name}...")
+    print(f"Uploading data to {table_name}. Please wait...")
     primary_keys = table_dict[table_name]
 
     if len(primary_keys) == 1:
@@ -218,8 +251,10 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
         cursor.execute(f"SELECT TOP 1 [{pk_col}] FROM [{table_name}] ORDER BY [{pk_col}] DESC")
         last_record = cursor.fetchone()
         last_value = last_record[0] if last_record else None
+        df[pk_col] = pd.to_datetime(df[pk_col], format='%d-%b-%Y %H:%M:%S', errors='coerce')
         if last_value is not None:
-            df = df[df[pk_col] > last_value]
+            df = df[df[pk_col] > last_value].copy()
+        df[pk_col] = df[pk_col].dt.strftime('%Y-%m-%d %H:%M:%S').astype(str)
 
     elif len(primary_keys) == 2:
         cursor.execute(f"""
@@ -228,14 +263,15 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
                 GROUP BY [NMI]
                 """)
         last_records = {nmi: max_end_interval for nmi, max_end_interval in cursor.fetchall()}
-        # Filter the DataFrame based on the last_records
-        df = df[df.apply(lambda row: (row['NMI'] not in last_records) or (row['END INTERVAL']
-                                                                          > last_records[row['NMI']]), axis=1)]
-
+        filtered_df = pd.DataFrame()
+        for nmi, last_time in last_records.items():
+            temp_df = df[(df['NMI'].astype(str) == str(nmi)) & (df['END INTERVAL'] > last_time)]
+            filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
+        df = filtered_df
     if df.empty:
         print("No new rows to insert after filtering with last records.")
         return
-    print(df)
+
     # Perform batch insert
     data_for_insert = [tuple(None if pd.isnull(item) else item for item in row) for row in df.to_records(index=False)]
     batch_insert(cursor, table_name, df.columns.tolist(), data_for_insert, conn)
@@ -263,6 +299,64 @@ def batch_insert(cursor, table_name, columns, data, conn, batch_size=1000):
                 batch_insert(cursor, table_name, columns, batch, conn, smaller_batch_size)
 
 
+def fetch_latest_date_from_azure(cursor, table_name):
+    query = f"SELECT MAX(Date_time) FROM {table_name}"
+    cursor.execute(query)
+    result = cursor.fetchone()
+    if result[0] is not None:
+        return result[0]
+    else:
+        return None
+
+
+def fetch_weather_data(latitude, longitude, start_date, end_date):
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "start_date": start_date,
+        "end_date": end_date,
+        "hourly": "temperature_2m",
+        "timezone": "auto"
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return None
+
+
+def process_weather_data(weather_data):
+    # Accessing nested data within 'hourly' key
+    hourly_data = weather_data['hourly']
+    hourly_times = hourly_data['time']
+    hourly_temperatures = hourly_data['temperature_2m']
+
+    # Convert the ISO8601 time strings to datetime objects
+    times = pd.to_datetime(hourly_times)
+
+    # Create the DataFrame
+    df_weather = pd.DataFrame({'Date_Time': times, 'Temperature': hourly_temperatures})
+
+    return df_weather
+
+
+def upload_temperature_to_azure_sql(df, table_name, conn, cursor, batch_size=2000):
+    print(f"Uploading data to {table_name}")
+    df_columns = df.columns.tolist()
+    sql_columns = ', '.join([f'[{col}]' for col in df_columns])
+    placeholders = ', '.join(['?'] * len(df_columns))
+    insert_query = f"INSERT INTO {table_name} ({sql_columns}) VALUES ({placeholders})"
+    data_for_insert = [tuple(row) for row in df.itertuples(index=False, name=None)]
+    try:
+        # Perform batch insert
+        batch_insert(cursor, table_name, df_columns, data_for_insert, conn)
+        conn.commit()
+    except pyodbc.Error as e:
+        print(f"Error during batch insert: {e}")
+        conn.rollback()
+
+
 def main():
     # Set up the email account
     print("Connecting to SQL Database...")
@@ -276,7 +370,6 @@ def main():
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
-    print(table_dict, all_tables)
     # Process unread emails
     all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
     filtered_unread_emails = [
@@ -285,6 +378,36 @@ def main():
         any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
     ]
     process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
+
+    # Upload the Temperature data
+    tem_input = input("Do you want to upload the temperature data to Azure SQL? (Y to continue / N to stop): ")
+    if tem_input == 'Y' or 'y' or '':
+        table_name = 'Temperature_hourly'
+        latest_date = fetch_latest_date_from_azure(cursor, table_name)
+        if latest_date:
+            start_date = (latest_date - timedelta(days=1 / 3)).strftime("%Y-%m-%d")
+        else:
+            start_date = "2020-01-01"  # Default start date if no latest date is available
+        end_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        latitude = -31.9522
+        longitude = 115.8614
+        weather_data = fetch_weather_data(latitude, longitude, start_date, end_date)
+
+        if weather_data:
+            df_weather = process_weather_data(weather_data)
+            upload_temperature_to_azure_sql(df_weather, table_name, conn, cursor)
+            print("Weather data upload complete.")
+        else:
+            print("Failed to fetch weather data.")
+    else:
+        print("Process is closing.")
+
+    # Upload the time into SQL table 'last_read_time'
+    now = datetime.now()
+    formatted_datetime = now.strftime('%Y-%m-%dT%H:%M:%S')
+    inset_query_time = 'INSERT INTO Last_read_time (Read_time) VALUES (?)'
+    cursor.execute(inset_query_time, formatted_datetime)
+    conn.commit()
     conn.close()
 
 
