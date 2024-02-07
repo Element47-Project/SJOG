@@ -12,6 +12,7 @@ from fuzzywuzzy import process
 import pdfplumber
 import requests
 from datetime import datetime, timedelta
+import pytz
 
 # Load environment variables
 load_dotenv()
@@ -25,9 +26,10 @@ script_dir = os.path.dirname(absolute_script_path)
 pdf_dir = script_dir + '/pdfs'
 PDF_DIR = '/pdfs'
 
+# Change the desired domains as requirements.
+DESIRED_DOMAINS = ['@gmail.com']
 # All settings in the .env file, including SQL and Email information.
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
-DESIRED_DOMAINS = ['@gmail.com']
 PASSWORD = os.environ.get('PASSWORD')
 SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
@@ -47,6 +49,7 @@ def connect_to_db(conn_str):
 
 
 def get_all_table_columns(cursor):
+    """Get all table columns name from Azure SQL."""
     tables_columns = {}
     cursor.execute("SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, "
                    "ORDINAL_POSITION")
@@ -97,6 +100,14 @@ def find_header_row(df, expected_columns):
             print(f"Matching Header Row Found at Index: {i}")
             return i
     return None
+
+
+def fetch_latest_date_from_azure(cursor, table_dict, table_name='Last_read_time'):
+    primary_key = table_dict[table_name][0] if table_dict[table_name] else None
+    query = f"SELECT TOP 1 [{primary_key}] FROM [{table_name}] ORDER BY [{primary_key}] DESC"
+    cursor.execute(query)
+    result = cursor.fetchone()
+    return result[0] if result else None
 
 
 def process_xlsx_attachments(attachment, table_dict, cursor, conn):
@@ -300,16 +311,6 @@ def batch_insert(cursor, table_name, columns, data, conn, batch_size=1000):
                 batch_insert(cursor, table_name, columns, batch, conn, smaller_batch_size)
 
 
-def fetch_latest_date_from_azure(cursor, table_name):
-    query = f"SELECT MAX(Date_time) FROM {table_name}"
-    cursor.execute(query)
-    result = cursor.fetchone()
-    if result[0] is not None:
-        return result[0]
-    else:
-        return None
-
-
 def fetch_weather_data(latitude, longitude, start_date, end_date):
     url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
@@ -365,22 +366,31 @@ def main():
         autodiscover=True,
         access_type=DELEGATE
     )
+    # Connect the Azure SQL
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
     # Process unread emails
-    all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
+    latest_date = fetch_latest_date_from_azure(cursor, table_dict)
+    timezone = pytz.timezone('UTC')
+    start = timezone.localize(latest_date)
+    end = timezone.localize(datetime.now())
+    all_unread_emails = account.inbox.filter(is_read=False,
+                                             datetime_received__range=(start, end)).order_by('-datetime_received')
     filtered_unread_emails = [
         email for email in all_unread_emails
         if email.sender and email.sender.email_address and
         any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
     ]
-    process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
+    if filtered_unread_emails:
+        process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
+    else:
+        print("No New Emails received.")
 
     # Upload the Temperature data
     print("Uploading the Recent Temperature to Azure. Please Wait..")
     table_name = 'Temperature_hourly'
-    latest_date = fetch_latest_date_from_azure(cursor, table_name)
+    latest_date = fetch_latest_date_from_azure(cursor, table_dict, table_name)
     if latest_date:
         start_date = (latest_date - timedelta(days=1 / 3)).strftime("%Y-%m-%d")
     else:
@@ -403,8 +413,10 @@ def main():
     inset_query_time = 'INSERT INTO Last_read_time (Read_time) VALUES (?)'
     cursor.execute(inset_query_time, formatted_datetime)
     conn.commit()
+    # Close the connection
     conn.close()
 
 
+# Entry
 if __name__ == "__main__":
     main()
