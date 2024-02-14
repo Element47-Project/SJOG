@@ -8,6 +8,7 @@ from exchangelib import Credentials, Account, DELEGATE, FileAttachment
 import openpyxl
 import xlrd
 from Gas_csv_Formatting import consumption
+from Elec_csv_Formatting import e_formatting
 from fuzzywuzzy import process
 import pdfplumber
 import requests
@@ -154,8 +155,8 @@ def process_xlsx_attachments(attachment, table_dict, cursor, conn):
 def process_csv_attachments(attachment, table_dict, cursor, conn):
     file_name_without_extension = attachment.name.rsplit('.', 1)[0]
     csv_header = pd.read_csv(io.BytesIO(attachment.content), nrows=0).columns.tolist()
+    csv_data = pd.read_csv(io.BytesIO(attachment.content))
     if file_name_without_extension in table_dict:
-        csv_data = pd.read_csv(io.BytesIO(attachment.content))
         upload_dataframe_to_azure_sql(csv_data, file_name_without_extension, cursor, table_dict, conn)
     elif csv_header == ['NMI', 'CHECKSUM', 'GASDAY', 'READ_TYPE', 'DAILY_HEAT_VALUE',
                         'CONSUMPTION_HR01', 'CONSUMPTION_HR02', 'CONSUMPTION_HR03', 'CONSUMPTION_HR04',
@@ -165,9 +166,15 @@ def process_csv_attachments(attachment, table_dict, cursor, conn):
                         'CONSUMPTION_HR17', 'CONSUMPTION_HR18', 'CONSUMPTION_HR19', 'CONSUMPTION_HR20',
                         'CONSUMPTION_HR21', 'CONSUMPTION_HR22', 'CONSUMPTION_HR23', 'CONSUMPTION_HR24',
                         'TOTAL_DAILY_CONSUMPTION', 'PEAK_RATE']:
-        csv_data = pd.read_csv(io.BytesIO(attachment.content))
         df_csv = consumption(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict, conn)
+    elif csv_header == ['Name', 'Supplier', 'Fuel', 'Account', 'Bill Date', 'Due Date',
+                        'Consumer', 'NMI', 'Site Address', 'From Date', 'To Date',
+                        'Charge Group', 'Charge Description', 'Unit Of Measure', 'Charge Rate',
+                        'DLF', 'TLF', 'Uplifted Rate', 'Quantity', 'Net Charge ($)', 'GST ($)',
+                        'Total Charge ($)', 'Information Only']:
+        df_csv = e_formatting(csv_data)
+        upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict, conn)
 
 
 def process_pdf_tables(attachment_content, directory=pdf_dir, filename=None):
@@ -370,6 +377,7 @@ def main():
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
+    print(all_tables)
     # Process unread emails
     latest_date = fetch_latest_date_from_azure(cursor, table_dict)
     timezone = pytz.timezone('UTC')
