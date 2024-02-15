@@ -366,34 +366,36 @@ def upload_temperature_to_azure_sql(df, table_name, conn, cursor):
 def main():
     # Set up the email account
     print("Connecting to SQL Database...")
-    credentials = Credentials(EMAIL_ADDRESS, PASSWORD)
-    account = Account(
-        EMAIL_ADDRESS,
-        credentials=credentials,
-        autodiscover=True,
-        access_type=DELEGATE
-    )
+    # credentials = Credentials(EMAIL_ADDRESS, PASSWORD)
+    # account = Account(
+    #     EMAIL_ADDRESS,
+    #     credentials=credentials,
+    #     autodiscover=True,
+    #     access_type=DELEGATE
+    # )
     # Connect the Azure SQL
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
-    print(all_tables)
     # Process unread emails
     latest_date = fetch_latest_date_from_azure(cursor, table_dict)
     timezone = pytz.timezone('UTC')
     start = timezone.localize(latest_date)
     end = timezone.localize(datetime.now())
-    all_unread_emails = account.inbox.filter(is_read=False,
-                                             datetime_received__range=(start, end)).order_by('-datetime_received')
-    filtered_unread_emails = [
-        email for email in all_unread_emails
-        if email.sender and email.sender.email_address and
-        any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
-    ]
-    if filtered_unread_emails:
-        process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
-    else:
-        print("No New Emails received.")
+    # all_unread_emails = account.inbox.filter(is_read=False,
+    #                                          datetime_received__range=(start, end)).order_by('-datetime_received')
+    # filtered_unread_emails = [
+    #     email for email in all_unread_emails
+    #     if email.sender and email.sender.email_address and
+    #     any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
+    # ]
+    # if filtered_unread_emails:
+    #     process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
+    # else:
+    #     print("No New Emails received.")
+    filename = 'CUSTOMER_ENERGY_BILLING_20240206120141.csv'
+    df = e_formatting(filename)
+    upload_dataframe_to_azure_sql(df, 'TestingElecBilling', cursor, table_dict, conn)
 
     # Upload the Temperature data
     print("Uploading the Recent Temperature to Azure. Please Wait..")
