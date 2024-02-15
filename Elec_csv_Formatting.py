@@ -1,4 +1,5 @@
 import pandas as pd
+filename = 'CUSTOMER_ENERGY_BILLING_20240206120141.csv'
 
 
 def determine_combined(row):
@@ -13,8 +14,8 @@ def determine_combined(row):
         return "Error"
 
 
-def e_formatting(filename):
-    df = pd.read_csv(filename)
+def e_formatting(file_name):
+    df = pd.read_csv(file_name)
     df_formatting = df
     drop_columns = ['Name', 'Supplier', 'Fuel', 'Consumer', 'Unit Of Measure', 'Charge Description', 'Charge Group',
                     'Charge Rate', 'Uplifted Rate', 'Information Only', 'GST ($)', 'Total Charge ($)']
@@ -51,12 +52,11 @@ def e_formatting(filename):
 
     # Merge the pivoted data frames
     pivot_df = pd.merge(pivot_charges, pivot_quantity, on=unchanged_columns, suffixes=('', '_quantity'))
-
-    # Merge additional columns like 'DLF' and 'TLF' from the original df if needed
-    pivot_df = pivot_df.merge(df[['Due Date', 'NMI', 'DLF', 'TLF']].drop_duplicates(),
-                              on=['Due Date', 'NMI'],
+    # Merge additional columns like 'DLF' and 'TLF' from the original df
+    pivot_df = pivot_df.merge(df[['From Date', 'NMI', 'DLF', 'TLF']].drop_duplicates(),
+                              on=['From Date', 'NMI'],
                               how='left').dropna(subset=['DLF'])
-
+    # GST AND Total calculation
     # pivot_df['GST ($)'] = round(pivot_df['Net Charge ($)'] * 0.1, 2)
     # pivot_df['Total ($)'] = pivot_df['Net Charge ($)'] + pivot_df['GST ($)']
 
@@ -69,48 +69,32 @@ def e_formatting(filename):
                'CAPACITY CHARGE ($)', 'NETWORK CHARGE ($)', 'IMO FEE ($)',
                'REC CHARGE ($)', 'DAILY SUPPLY CHARGE ($)', 'OTHER CHARGES',
                'INVOICE TOTAL ($)', 'DLF', 'TLF']
-    df_data = pd.DataFrame(columns=columns)
-
-    for col in columns:
-        if col == 'ACCOUNT':
-            df_data[col] = pivot_df['Account']  # Assuming 'Account' is an existing column you want to copy
-        elif col == 'SITE ADDRESS':
-            df_data[col] = pivot_df['Site Address']  # Assuming 'Site Address' is an existing column you want to copy
-        elif col == 'NMI':
-            df_data[col] = pivot_df['NMI']  # Assuming 'NMI' is an existing column you want to copy
-        elif col == 'BILLING PERIOD START DATE':
-            df_data[col] = pivot_df['From Date']
-        elif col == 'BILLING PERIOD END DATE':
-            df_data[col] = pivot_df['To Date']
-        elif col == 'TOTAL PEAK CONSUMPTION (KWH)':
-            df_data[col] = pivot_df['Peak Energy_quantity']
-        elif col == 'TOTAL OFF-PEAK CONSUMPTION (KWH)':
-            df_data[col] = pivot_df['Off Peak Energy_quantity']
-        elif col == 'TOTAL PEAK SPEND ($)':
-            df_data[col] = pivot_df['Peak Energy']
-        elif col == 'TOTAL OFF-PEAK SPEND ($)':
-            df_data[col] = pivot_df['Off Peak Energy']
-        elif col == 'CAPACITY CHARGE ($)':
-            df_data[col] = pivot_df['Capacity Charge']
-        elif col == 'NETWORK CHARGE ($)':
-            df_data[col] = (pivot_df['Network Distribution'] + pivot_df['Network Transmission'] +
-                            pivot_df['Network Other'])
-        elif col == 'IMO FEE ($)':
-            df_data[col] = pivot_df['AEMO Market Charges']
-        elif col == 'REC CHARGE ($)':
-            df_data[col] = pivot_df['REC FEE']
-        elif col == 'OTHER CHARGES':
-            df_data[col] = pivot_df['Other']
-        elif col == 'INVOICE TOTAL ($)':
-            df_data[col] = pivot_df[['Capacity Charge', 'Network Distribution', 'Network Transmission',
-                                    'Network Other', 'AEMO Market Charges', 'REC FEE', 'Other', 'Discount']].sum(axis=1)
-        elif col == 'DLF':
-            df_data[col] = pivot_df['DLF']
-        elif col == 'TLF':
-            df_data[col] = pivot_df['TLF']
-        else:
-            df_data[col] = pd.NA
+    df_data = pd.DataFrame(index=pivot_df.index, columns=columns)
+    df_data['ACCTNO'] = 'ALINTA ENERGY'
+    df_data['ACCOUNT'] = pivot_df['Account'].astype(str)
+    df_data['SITE ADDRESS'] = pivot_df['Site Address'].astype(str)
+    df_data['NMI'] = pivot_df['NMI'].astype(str)
+    df_data['BILLING PERIOD START DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
+    df_data['BILLING PERIOD START DATE'] = df_data['BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
+    df_data['BILLING PERIOD END DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
+    df_data['BILLING PERIOD END DATE'] = df_data['BILLING PERIOD END DATE'].dt.strftime('%Y-%m-%d').astype(str)
+    df_data['TOTAL PEAK CONSUMPTION (KWH)'] = pivot_df['Peak Energy_quantity']
+    df_data['TOTAL OFF-PEAK CONSUMPTION (KWH)'] = pivot_df['Off Peak Energy_quantity']
+    df_data['TOTAL PEAK SPEND ($)'] = pivot_df['Peak Energy']
+    df_data['TOTAL OFF-PEAK SPEND ($)'] = pivot_df['Off Peak Energy']
+    df_data['CAPACITY CHARGE ($)'] = pivot_df['Capacity Charge']
+    df_data['NETWORK CHARGE ($)'] = (pivot_df['Network Distribution'] + pivot_df['Network Transmission'] +
+                                     pivot_df['Network Other'])
+    df_data['IMO FEE ($)'] = pivot_df['AEMO Market Charges']
+    df_data['REC CHARGE ($)'] = pivot_df['REC FEE']
+    df_data['OTHER CHARGES'] = pivot_df['Other']
+    df_data['INVOICE TOTAL ($)'] = pivot_df[['Capacity Charge', 'Network Distribution', 'Network Transmission',
+                                             'Network Other', 'AEMO Market Charges', 'REC FEE', 'Other',
+                                             'Discount']].sum(axis=1)
+    df_data['DLF'] = pivot_df['DLF']
+    df_data['TLF'] = pivot_df['TLF']
+    df_data['INVOICE #'] = 'Upload later'
     df_data['TOTAL ENERGY SPEND $'] = df_data['TOTAL PEAK SPEND ($)'] + df_data['TOTAL OFF-PEAK SPEND ($)']
+    print(df_data.dtypes)
+    print(df_data)
     return df_data
-
-
