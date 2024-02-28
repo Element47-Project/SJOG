@@ -75,7 +75,7 @@ def e_formatting(file_name):
     df_data['SITE ADDRESS'] = pivot_df['Site Address'].astype(str)
     df_data['NMI'] = pivot_df['NMI'].astype(str)
     df_data['BILLING PERIOD START DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
-    df_data['BILLING PERIOD START DATE'] = df_data['BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
+    # df_data['BILLING PERIOD START DATE'] = df_data['BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
     df_data['BILLING PERIOD END DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
     df_data['BILLING PERIOD END DATE'] = df_data['BILLING PERIOD END DATE'].dt.strftime('%Y-%m-%d').astype(str)
     df_data['TOTAL PEAK CONSUMPTION (KWH)'] = pivot_df['Peak Energy_quantity']
@@ -95,6 +95,4 @@ def e_formatting(file_name):
     df_data['TLF'] = pivot_df['TLF']
     df_data['INVOICE #'] = 'Upload later'
     df_data['TOTAL ENERGY SPEND $'] = df_data['TOTAL PEAK SPEND ($)'] + df_data['TOTAL OFF-PEAK SPEND ($)']
-    print(df_data.dtypes)
-    print(df_data)
     return df_data
