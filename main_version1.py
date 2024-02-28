@@ -30,7 +30,7 @@ PDF_DIR = '/pdfs'
 # Change the desired domains as requirements.
 DESIRED_DOMAINS = ['@gmail.com']
 # All settings in the .env file, including SQL and Email information.
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS")
+EMAIL_ADDRESS = 'element47testing@outlook.com'
 PASSWORD = os.environ.get('PASSWORD')
 SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
@@ -275,7 +275,7 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
             df = df[df[pk_col] > last_value].copy()
         df[pk_col] = df[pk_col].dt.strftime('%Y-%m-%d %H:%M:%S').astype(str)
 
-    elif len(primary_keys) == 2:
+    elif len(primary_keys) == 2 and 'END INTERVAL' in primary_keys:
         cursor.execute(f"""
                 SELECT [NMI], MAX([END INTERVAL]) 
                 FROM [{table_name}] 
@@ -283,10 +283,43 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
                 """)
         last_records = {nmi: max_end_interval for nmi, max_end_interval in cursor.fetchall()}
         filtered_df = pd.DataFrame()
+        df['END INTERVAL'] = pd.to_datetime(df['END INTERVAL'], errors='coerce')
+        nmi_not_in_last_records = ~df['NMI'].astype(str).isin(last_records.keys())
+        temp_df1_indices = df[nmi_not_in_last_records].index
+        df.loc[temp_df1_indices, 'END INTERVAL'] = df.loc[
+            temp_df1_indices, 'END INTERVAL'].dt.strftime('%Y-%m-%d').astype(str)
+        temp_df1 = df.loc[temp_df1_indices]
         for nmi, last_time in last_records.items():
-            temp_df = df[(df['NMI'].astype(str) == str(nmi)) & (df['END INTERVAL'] > last_time)]
+            temp_indices = df[(df['NMI'].astype(str) == str(nmi)) & (df['END INTERVAL'] > last_time)].index
+            df.loc[temp_indices, 'END INTERVAL'] = df.loc[
+                temp_indices, 'END INTERVAL'].dt.strftime('%Y-%m-%d').astype(str)
+            # Instead of modifying temp_df directly, modify df and then select the modified rows to concatenate
+            temp_df = df.loc[temp_indices]
             filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
-        df = filtered_df
+        df = pd.concat([temp_df1, filtered_df], ignore_index=True)
+
+    elif len(primary_keys) == 2 and 'BILLING PERIOD START DATE' in primary_keys:
+        cursor.execute(f"""
+                SELECT [NMI], MAX([BILLING PERIOD START DATE]) 
+                FROM [{table_name}] 
+                GROUP BY [NMI]
+                """)
+        last_records = {nmi: max_end_interval for nmi, max_end_interval in cursor.fetchall()}
+        filtered_df = pd.DataFrame()
+        df['BILLING PERIOD START DATE'] = pd.to_datetime(df['BILLING PERIOD START DATE'], errors='coerce')
+        nmi_not_in_last_records = ~df['NMI'].astype(str).isin(last_records.keys())
+        temp_df1_indices = df[nmi_not_in_last_records].index
+        df.loc[temp_df1_indices, 'BILLING PERIOD START DATE'] = df.loc[
+            temp_df1_indices, 'BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
+        temp_df1 = df.loc[temp_df1_indices]
+        for nmi, last_time in last_records.items():
+            temp_indices = df[(df['NMI'].astype(str) == str(nmi)) & (df['BILLING PERIOD START DATE'] > last_time)].index
+            df.loc[temp_indices, 'BILLING PERIOD START DATE'] = df.loc[
+                temp_indices, 'BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
+            # Instead of modifying temp_df directly, modify df and then select the modified rows to concatenate
+            temp_df = df.loc[temp_indices]
+            filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
+        df = pd.concat([temp_df1, filtered_df], ignore_index=True)
     if df.empty:
         print("No New Rows to Insert After Filtering with Last Records.")
         return
@@ -316,6 +349,14 @@ def batch_insert(cursor, table_name, columns, data, conn, batch_size=1000):
             if batch_size > 100:
                 smaller_batch_size = max(batch_size // 2, 100)
                 batch_insert(cursor, table_name, columns, batch, conn, smaller_batch_size)
+            else:
+                for row in batch:
+                    try:
+                        cursor.execute(insert_query, row)
+                        cursor.commit()
+                    except pyodbc.Error as e:
+                        print(f"Duplicate row, skipping insertion:{e}")
+                        continue
 
 
 def fetch_weather_data(latitude, longitude, start_date, end_date):
@@ -366,36 +407,34 @@ def upload_temperature_to_azure_sql(df, table_name, conn, cursor):
 def main():
     # Set up the email account
     print("Connecting to SQL Database...")
-    # credentials = Credentials(EMAIL_ADDRESS, PASSWORD)
-    # account = Account(
-    #     EMAIL_ADDRESS,
-    #     credentials=credentials,
-    #     autodiscover=True,
-    #     access_type=DELEGATE
-    # )
+    credentials = Credentials(EMAIL_ADDRESS, PASSWORD)
+    account = Account(
+        EMAIL_ADDRESS,
+        credentials=credentials,
+        autodiscover=True,
+        access_type=DELEGATE
+    )
     # Connect the Azure SQL
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
+    # Email uploading part: uncomment the code for using.
     # Process unread emails
     latest_date = fetch_latest_date_from_azure(cursor, table_dict)
     timezone = pytz.timezone('UTC')
     start = timezone.localize(latest_date)
     end = timezone.localize(datetime.now())
-    # all_unread_emails = account.inbox.filter(is_read=False,
-    #                                          datetime_received__range=(start, end)).order_by('-datetime_received')
-    # filtered_unread_emails = [
-    #     email for email in all_unread_emails
-    #     if email.sender and email.sender.email_address and
-    #     any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
-    # ]
-    # if filtered_unread_emails:
-    #     process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
-    # else:
-    #     print("No New Emails received.")
-    filename = 'CUSTOMER_ENERGY_BILLING_20240206120141.csv'
-    df = e_formatting(filename)
-    upload_dataframe_to_azure_sql(df, 'TestingElecBilling', cursor, table_dict, conn)
+    all_unread_emails = account.inbox.filter(is_read=False,
+                                             datetime_received__range=(start, end)).order_by('-datetime_received')
+    filtered_unread_emails = [
+        email for email in all_unread_emails
+        if email.sender and email.sender.email_address and
+        any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
+    ]
+    if filtered_unread_emails:
+        process_email_attachments(cursor, filtered_unread_emails, table_dict, conn)
+    else:
+        print("No New Emails received.")
 
     # Upload the Temperature data
     print("Uploading the Recent Temperature to Azure. Please Wait..")
