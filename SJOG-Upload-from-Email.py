@@ -13,7 +13,8 @@ from fuzzywuzzy import process
 import pdfplumber
 import requests
 from datetime import datetime, timedelta
-import pytz
+from sqlalchemy import create_engine
+# import pytz
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +37,7 @@ SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
 SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
 SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
+engine = create_engine(f'mssql+pyodbc://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_SERVER}/{SQL_DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server')
 CONNECTION_STRING = (
     f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={SQL_SERVER};'
     f'DATABASE={SQL_DB_NAME};UID={SQL_USERNAME};PWD={SQL_PASSWORD}'
@@ -112,38 +114,21 @@ def fetch_latest_date_from_azure(cursor, table_dict, table_name='Last_read_time'
 
 
 def process_xlsx_attachments(attachment, table_dict, cursor, conn):
-    all_tables_columns = get_all_table_columns(cursor)
     try:
-        # Open the workbook in memory
         excel_stream = io.BytesIO(attachment.content)
         workbook = openpyxl.load_workbook(excel_stream, read_only=True)
 
-        excel_stream.seek(0)  # Ensure we are at the beginning of the stream
-        first_sheet = workbook[workbook.sheetnames[0]]  # Use the first sheet to identify header and table
-        temp_df = pd.DataFrame(first_sheet.iter_rows(values_only=True, max_row=20))
-        header_row_index = None
-        upload_table = None
-        for table_name, azure_columns in all_tables_columns.items():
-            header_row_index = find_header_row(temp_df, azure_columns)
-            if header_row_index is not None:
-                upload_table = table_name
-                break  # Found a matching header, break out of the loop
-
-        # If header_row_index or table name not found, return or raise an exception
-        if header_row_index is None or upload_table is None:
-            print(f"Header Row or Table Name not Found in the Excel File {attachment.name}")
-            return
-
-        # Process each sheet using the found header row index and table name
         for sheet_name in workbook.sheetnames:
-            excel_stream.seek(0)  # Reset the stream to the beginning for each sheet
+            excel_stream.seek(0)
+            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=4)
 
-            # Read the entire sheet starting from the header row index
-            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=header_row_index)
-            batch_df.columns = temp_df.iloc[header_row_index].values  # Set the correct header
-
-            # Upload the DataFrame to the database
-            upload_dataframe_to_azure_sql(batch_df, upload_table, cursor, table_dict, conn)
+            # Find the matching table name based on the column names
+            for table_name, azure_columns in get_all_table_columns(cursor).items():
+                if all(col in batch_df.columns for col in azure_columns):
+                    upload_dataframe_to_azure_sql(batch_df, table_name, cursor, table_dict, conn)
+                    break
+            else:
+                print(f"No matching table found for sheet: {sheet_name}")
 
     except xlrd.biffh.XLRDError as e:
         if str(e) == "Workbook is encrypted":
@@ -265,15 +250,14 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
     primary_keys = table_dict[table_name]
 
     if len(primary_keys) == 1:
-        # Single primary key scenario
         pk_col = primary_keys[0]
         cursor.execute(f"SELECT TOP 1 [{pk_col}] FROM [{table_name}] ORDER BY [{pk_col}] DESC")
         last_record = cursor.fetchone()
         last_value = last_record[0] if last_record else None
         df[pk_col] = pd.to_datetime(df[pk_col], format='%d-%b-%Y %H:%M:%S', errors='coerce')
+        df[pk_col] = df[pk_col].dt.strftime('%Y-%m-%d %H:%M:%S')
         if last_value is not None:
             df = df[df[pk_col] > last_value].copy()
-        df[pk_col] = df[pk_col].dt.strftime('%Y-%m-%d %H:%M:%S').astype(str)
 
     elif len(primary_keys) == 2 and 'END INTERVAL' in primary_keys:
         cursor.execute(f"""
@@ -286,14 +270,9 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
         df['END INTERVAL'] = pd.to_datetime(df['END INTERVAL'], errors='coerce')
         nmi_not_in_last_records = ~df['NMI'].astype(str).isin(last_records.keys())
         temp_df1_indices = df[nmi_not_in_last_records].index
-        df.loc[temp_df1_indices, 'END INTERVAL'] = df.loc[
-            temp_df1_indices, 'END INTERVAL'].dt.strftime('%Y-%m-%d').astype(str)
         temp_df1 = df.loc[temp_df1_indices]
         for nmi, last_time in last_records.items():
             temp_indices = df[(df['NMI'].astype(str) == str(nmi)) & (df['END INTERVAL'] > last_time)].index
-            df.loc[temp_indices, 'END INTERVAL'] = df.loc[
-                temp_indices, 'END INTERVAL'].dt.strftime('%Y-%m-%d').astype(str)
-            # Instead of modifying temp_df directly, modify df and then select the modified rows to concatenate
             temp_df = df.loc[temp_indices]
             filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
         df = pd.concat([temp_df1, filtered_df], ignore_index=True)
@@ -309,24 +288,24 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict, conn):
         df['BILLING PERIOD START DATE'] = pd.to_datetime(df['BILLING PERIOD START DATE'], errors='coerce')
         nmi_not_in_last_records = ~df['NMI'].astype(str).isin(last_records.keys())
         temp_df1_indices = df[nmi_not_in_last_records].index
-        df.loc[temp_df1_indices, 'BILLING PERIOD START DATE'] = df.loc[
-            temp_df1_indices, 'BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
         temp_df1 = df.loc[temp_df1_indices]
         for nmi, last_time in last_records.items():
-            temp_indices = df[(df['NMI'].astype(str) == str(nmi)) & (df['BILLING PERIOD START DATE'] > last_time)].index
-            df.loc[temp_indices, 'BILLING PERIOD START DATE'] = df.loc[
-                temp_indices, 'BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
-            # Instead of modifying temp_df directly, modify df and then select the modified rows to concatenate
+            last_time_datetime = pd.to_datetime(last_time)
+            temp_indices = df[(df['NMI'].astype(str) == str(nmi)) & (
+                        df['BILLING PERIOD START DATE'] > last_time_datetime)].index
             temp_df = df.loc[temp_indices]
             filtered_df = pd.concat([filtered_df, temp_df], ignore_index=True)
         df = pd.concat([temp_df1, filtered_df], ignore_index=True)
+
     if df.empty:
         print("No New Rows to Insert After Filtering with Last Records.")
         return
 
-    # Perform batch insert
-    data_for_insert = [tuple(None if pd.isnull(item) else item for item in row) for row in df.to_records(index=False)]
-    batch_insert(cursor, table_name, df.columns.tolist(), data_for_insert, conn)
+    try:
+        df.to_sql(table_name, engine, if_exists='append', index=False)
+        print("Insert Successful")
+    except pyodbc.Error as e:
+        print(e)
 
 
 def batch_insert(cursor, table_name, columns, data, conn, batch_size=1000):
@@ -381,13 +360,10 @@ def process_weather_data(weather_data):
     hourly_data = weather_data['hourly']
     hourly_times = hourly_data['time']
     hourly_temperatures = hourly_data['temperature_2m']
-
     # Convert the ISO8601 time strings to datetime objects
     times = pd.to_datetime(hourly_times)
-
     # Create the DataFrame
     df_weather = pd.DataFrame({'Date_Time': times, 'Temperature': hourly_temperatures})
-
     return df_weather
 
 
@@ -396,8 +372,7 @@ def upload_temperature_to_azure_sql(df, table_name, conn, cursor):
     df_columns = df.columns.tolist()
     data_for_insert = [tuple(row) for row in df.itertuples(index=False, name=None)]
     try:
-        # Perform batch insert
-        batch_insert(cursor, table_name, df_columns, data_for_insert, conn)
+        df.to_sql(table_name, engine, if_exists='append', index=False)
         conn.commit()
     except pyodbc.Error as e:
         print(f"Error during batch insert: {e}")
@@ -420,12 +395,14 @@ def main():
     table_dict, all_tables = get_all_table_primary_keys(cursor)
     # Email uploading part: uncomment the code for using.
     # Process unread emails
-    latest_date = fetch_latest_date_from_azure(cursor, table_dict)
-    timezone = pytz.timezone('UTC')
-    start = timezone.localize(latest_date)
-    end = timezone.localize(datetime.now())
-    all_unread_emails = account.inbox.filter(is_read=False,
-                                             datetime_received__range=(start, end)).order_by('-datetime_received')
+    # latest_date = fetch_latest_date_from_azure(cursor, table_dict)
+    # timezone = pytz.timezone('UTC')
+    all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
+    # else:
+    #     start = timezone.localize(latest_date)
+    #     end = timezone.localize(datetime.now())
+    #     all_unread_emails = account.inbox.filter(is_read=False,
+    #                                              datetime_received__range=(start, end)).order_by('-datetime_received')
     filtered_unread_emails = [
         email for email in all_unread_emails
         if email.sender and email.sender.email_address and

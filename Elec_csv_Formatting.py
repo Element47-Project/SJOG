@@ -1,5 +1,4 @@
 import pandas as pd
-filename = 'CUSTOMER_ENERGY_BILLING_20240206120141.csv'
 
 
 def determine_combined(row):
@@ -14,8 +13,7 @@ def determine_combined(row):
         return "Error"
 
 
-def e_formatting(file_name):
-    df = pd.read_csv(file_name)
+def e_formatting(df):
     df_formatting = df
     drop_columns = ['Name', 'Supplier', 'Fuel', 'Consumer', 'Unit Of Measure', 'Charge Description', 'Charge Group',
                     'Charge Rate', 'Uplifted Rate', 'Information Only', 'GST ($)', 'Total Charge ($)']
@@ -40,13 +38,11 @@ def e_formatting(file_name):
         'Quantity': 'sum'
     }).reset_index()
 
-    # Pivot 'Net Charge ($)' and 'Quantity' separately
     pivot_charges = aggregated_data.pivot_table(index=unchanged_columns, columns='Combined',
                                                 values='Net Charge ($)', aggfunc='sum', fill_value=0)
     pivot_quantity = aggregated_data.pivot_table(index=unchanged_columns, columns='Combined',
                                                  values='Quantity', aggfunc='sum', fill_value=0)
 
-    # Reset index to turn multi-index into columns
     pivot_charges.reset_index(inplace=True)
     pivot_quantity.reset_index(inplace=True)
 
@@ -74,10 +70,14 @@ def e_formatting(file_name):
     df_data['ACCOUNT'] = pivot_df['Account'].astype(str)
     df_data['SITE ADDRESS'] = pivot_df['Site Address'].astype(str)
     df_data['NMI'] = pivot_df['NMI'].astype(str)
-    df_data['BILLING PERIOD START DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
-    # df_data['BILLING PERIOD START DATE'] = df_data['BILLING PERIOD START DATE'].dt.strftime('%Y-%m-%d').astype(str)
-    df_data['BILLING PERIOD END DATE'] = pd.to_datetime(pivot_df['From Date'], dayfirst=True)
-    df_data['BILLING PERIOD END DATE'] = df_data['BILLING PERIOD END DATE'].dt.strftime('%Y-%m-%d').astype(str)
+    pivot_df['From Date'] = pd.to_datetime(pivot_df['From Date'], errors='coerce', dayfirst=True)
+    pivot_df['To Date'] = pd.to_datetime(pivot_df['To Date'], errors='coerce', dayfirst=True)
+    df_data['BILLING PERIOD START DATE'] = pd.to_datetime(
+        pivot_df['From Date'].dt.strftime('%Y-%m-%d') + ' 00:00:00',
+        format='%Y-%m-%d %H:%M:%S').astype(str)
+    df_data['BILLING PERIOD END DATE'] = pd.to_datetime(
+        pivot_df['To Date'].dt.strftime('%Y-%m-%d') + ' 00:00:00',
+        format='%Y-%m-%d %H:%M:%S').astype(str)
     df_data['TOTAL PEAK CONSUMPTION (KWH)'] = pivot_df['Peak Energy_quantity']
     df_data['TOTAL OFF-PEAK CONSUMPTION (KWH)'] = pivot_df['Off Peak Energy_quantity']
     df_data['TOTAL PEAK SPEND ($)'] = pivot_df['Peak Energy']

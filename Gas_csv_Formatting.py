@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def consumption(df):
     rename_dict = {
         'CONSUMPTION_HR01': '00', 'CONSUMPTION_HR02': '01', 'CONSUMPTION_HR03': '02',
@@ -35,7 +36,7 @@ def consumption(df):
     # Combine GASDAY and Time into a single datetime column
     df_melted['END INTERVAL'] = pd.to_datetime(
         df_melted['GASDAY'].dt.strftime('%d-%m-%Y') + ' ' + df_melted['Time'] + ':00:00',
-        format='%d-%m-%Y %H:%M:%S'  # Correct format string
+        format='%d-%m-%Y %H:%M:%S'
     )
     df_melted.sort_values(by='END INTERVAL', inplace=True)
 
@@ -47,7 +48,6 @@ def consumption(df):
     df_melted['NMI'] = '56009523942'
     df_melted['METER'] = 'M1600IR003'
     df_melted['SITE ADDRESS'] = '1 Clayton Street Midland, WA, 6156'
-    print("Formatting Process Done")
     return df_melted
 
 
