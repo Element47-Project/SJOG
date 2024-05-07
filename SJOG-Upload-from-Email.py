@@ -93,7 +93,7 @@ def process_xlsx_attachments(attachment, table_dict, cursor):
 
         for sheet_name in workbook.sheetnames:
             excel_stream.seek(0)
-            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=4)
+            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=0)
 
             # Find the matching table name based on the column names
             for table_name, azure_columns in get_all_table_columns(cursor).items():
@@ -133,6 +133,8 @@ def process_csv_attachments(attachment, table_dict, cursor):
                         'Total Charge ($)', 'Information Only']:
         df_csv = e_formatting(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
+    else:
+        print("The CSV file cannot be inserted into the Azure SQL DB")
 
 
 def process_pdf_attachments(attachment, table_dict, cursor):
@@ -145,7 +147,7 @@ def process_pdf_attachments(attachment, table_dict, cursor):
             if not table.empty:
                 table.columns = correct_headers
                 processed_table = table.iloc[2:].reset_index(drop=True)
-                processed_table['Read Date'] = pd.to_datetime(processed_table['Read Date']).dt.strftime('%Y-%m-%d')
+                processed_table['Read Date'] = pd.to_datetime(processed_table['Read Date'], format='%d/%m/%Y')
                 upload_dataframe_to_azure_sql(processed_table, 'TestingWater', cursor, table_dict)
 
     except Exception as e:
@@ -157,14 +159,16 @@ def process_email_attachments(cursor, attachment_files, table_dict):
     for item in attachment_files:
         if item.attachments:
             for attachment in item.attachments:
-                print(f"Processing attachment: {attachment.name}")
                 filename, extension = os.path.splitext(attachment.name)
                 if isinstance(attachment, FileAttachment):
                     if extension in ['.xlsx', '.xls']:
+                        print(f"Processing attachment: {attachment.name}")
                         process_xlsx_attachments(attachment, table_dict, cursor)
                     elif extension == '.csv':
+                        print(f"Processing attachment: {attachment.name}")
                         process_csv_attachments(attachment, table_dict, cursor)
                     elif extension == '.pdf':
+                        print(f"Processing attachment: {attachment.name}")
                         process_pdf_attachments(attachment, table_dict, cursor)
                 item.is_read = True
 
@@ -177,7 +181,7 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict):
         pk_col = primary_keys[0]
         cursor.execute(f"SELECT TOP 1 [{pk_col}] FROM [{table_name}] ORDER BY [{pk_col}] DESC")
         last_record = cursor.fetchone()
-        last_value = last_record[0] if last_record else None
+        last_value = pd.to_datetime(last_record[0], errors='coerce') if last_record else None
         df[pk_col] = pd.to_datetime(df[pk_col], format='%d-%b-%Y %H:%M:%S', errors='coerce')
         if last_value is not None:
             df = df[df[pk_col] > last_value].copy()
