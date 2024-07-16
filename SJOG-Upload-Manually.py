@@ -3,7 +3,6 @@ import io
 import pandas as pd
 import pyodbc
 from dotenv import load_dotenv
-from exchangelib import Credentials, Account, DELEGATE, FileAttachment
 import openpyxl
 import xlrd
 from Gas_csv_Formatting import consumption
@@ -16,15 +15,16 @@ from Apollo import upload_apollo
 
 # Load environment variables
 load_dotenv()
-# Change the desired domains as requirements.
-DESIRED_DOMAINS = ['@gmail.com', 'element47.com.au']
-# All settings in the .env file, including SQL and Email information.
-EMAIL_ADDRESS = 'element47testing@outlook.com'
-PASSWORD = os.environ.get('PASSWORD')
+
+# All settings in the .env file, including SQL information.
 SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
 SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
 SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
+FILE_DIR = os.environ.get('FILE_ADDRESS')
+
+print(f"File directory: {FILE_DIR}")
+
 engine = create_engine(f'mssql+pyodbc://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_SERVER}/{SQL_DB_NAME}'
                        f'?driver=ODBC+Driver+18+for+SQL+Server')
 CONNECTION_STRING = (
@@ -87,13 +87,11 @@ def fetch_latest_date_from_azure(cursor, table_dict, table_name='Temperature_hou
     return last_record[0] if last_record else None
 
 
-def process_xlsx_attachments(attachment, table_dict, cursor):
+def process_xlsx_file(file_path, table_dict, cursor):
     try:
-        excel_stream = io.BytesIO(attachment.content)
-        workbook = openpyxl.load_workbook(excel_stream, read_only=True)
+        workbook = openpyxl.load_workbook(file_path, read_only=True)
 
         for sheet_name in workbook.sheetnames:
-            excel_stream.seek(0)
             sheet = workbook[sheet_name]
             skip_rows = 0
             for row in sheet.iter_rows(min_row=1, max_col=1):
@@ -102,50 +100,57 @@ def process_xlsx_attachments(attachment, table_dict, cursor):
                     skip_rows = cell.row - 1
                     break
 
-            batch_df = pd.read_excel(excel_stream, sheet_name=sheet_name, skiprows=skip_rows)
+            batch_df = pd.read_excel(file_path, sheet_name=sheet_name, skiprows=skip_rows)
 
             # Find the matching table name based on the column names
             for table_name, azure_columns in get_all_table_columns(cursor).items():
                 if all(col in batch_df.columns for col in azure_columns):
                     upload_dataframe_to_azure_sql(batch_df, table_name, cursor, table_dict)
+                    delete_file(file_path)
                     break
             else:
                 print(f"No matching table found for sheet: {sheet_name}")
 
     except xlrd.biffh.XLRDError as e:
         if str(e) == "Workbook is encrypted":
-            print(f"Cannot process encrypted file: {attachment.name}")
+            print(f"Cannot process encrypted file: {file_path}")
         else:
             raise
 
 
-def process_csv_attachments(attachment, table_dict, cursor):
-    file_name_without_extension = attachment.name.rsplit('.', 1)[0]
-    csv_header = pd.read_csv(io.BytesIO(attachment.content), nrows=0).columns.tolist()
-    csv_data = pd.read_csv(io.BytesIO(attachment.content))
+def process_csv_file(file_path, table_dict, cursor):
+    file_name_without_extension = os.path.basename(file_path).rsplit('.', 1)[0]
+    csv_header = pd.read_csv(file_path, nrows=0).columns.tolist()
+    csv_data = pd.read_csv(file_path)
     if file_name_without_extension in table_dict:
         upload_dataframe_to_azure_sql(csv_data, file_name_without_extension, cursor, table_dict)
+        delete_file(file_path)
     elif 'CONSUMPTION_HR01' in csv_header:
         df_csv = consumption(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
+        delete_file(file_path)
+    elif 'GAS (GJ)' in csv_header:
+        upload_dataframe_to_azure_sql(csv_data, 'TestingGas', cursor, table_dict)
+        delete_file(file_path)
     elif 'Unit Of Measure' in csv_header:
         df_csv = e_formatting(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
+        delete_file(file_path)
     elif 'LogRecNum' in csv_header:
         try:
             df_csv = upload_apollo(csv_data, file_name_without_extension)
             df_csv.to_sql('Apollo_5MINS', engine, if_exists='append', index=False)
             print("Insert Successful")
+            delete_file(file_path)
         except pyodbc.Error as e:
             print(e)
     else:
         print("The CSV file cannot be inserted into the Azure SQL DB")
 
 
-def process_pdf_attachments(attachment, table_dict, cursor):
+def process_pdf_file(file_path, table_dict, cursor):
     try:
-        pdf_stream = io.BytesIO(attachment.content)
-        tables = tabula.read_pdf(pdf_stream, pages='all', multiple_tables=True)
+        tables = tabula.read_pdf(file_path, pages='all', multiple_tables=True)
         correct_headers = ['Water Use Year', 'Read Date', 'Reading', 'Dial Reading', 'Kilolitres Used',
                            'Consumption Year to Date', 'Daily Rate']
         for table in tables:
@@ -154,26 +159,24 @@ def process_pdf_attachments(attachment, table_dict, cursor):
                 processed_table = table.iloc[2:].reset_index(drop=True)
                 processed_table['Read Date'] = pd.to_datetime(processed_table['Read Date'], format='%d/%m/%Y')
                 upload_dataframe_to_azure_sql(processed_table, 'TestingWater', cursor, table_dict)
+                delete_file(file_path)
 
     except Exception as e:
-        print(f"Error processing PDF attachment: {attachment.name}")
+        print(f"Error processing PDF file: {file_path}")
         print(e)
 
 
-def process_email_attachments(cursor, attachment_files, table_dict):
-    for item in attachment_files:
-        if item.attachments:
-            for attachment in item.attachments:
-                filename, extension = os.path.splitext(attachment.name)
-                if isinstance(attachment, FileAttachment):
-                    print(f"Processing attachment: {attachment.name}")
-                    if extension in ['.xlsx', '.xls']:
-                        process_xlsx_attachments(attachment, table_dict, cursor)
-                    elif extension == '.csv':
-                        process_csv_attachments(attachment, table_dict, cursor)
-                    elif extension == '.pdf':
-                        process_pdf_attachments(attachment, table_dict, cursor)
-            item.is_read = True
+def process_files_in_directory(directory, cursor, table_dict):
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+        _, extension = os.path.splitext(filename)
+        print(f"Processing file: {filename}")
+        if extension in ['.xlsx', '.xls']:
+            process_xlsx_file(file_path, table_dict, cursor)
+        elif extension == '.csv':
+            process_csv_file(file_path, table_dict, cursor)
+        elif extension == '.pdf':
+            process_pdf_file(file_path, table_dict, cursor)
 
 
 def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict):
@@ -238,6 +241,16 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict):
         print(e)
 
 
+def delete_file(file_path):
+    """Delete the file at the specified file path."""
+    try:
+        os.remove(file_path)
+        print(f"Deleted file: {file_path}")
+    except OSError as e:
+        print(f"Error deleting file: {file_path}")
+        print(e)
+
+
 def fetch_weather_data(latitude, longitude, start_date, end_date):
     url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
@@ -268,30 +281,14 @@ def process_weather_data(weather_data):
 
 
 def main():
-    # Set up the email account
     print("Connecting to SQL Database...")
-    credentials = Credentials(EMAIL_ADDRESS, PASSWORD)
-    account = Account(
-        EMAIL_ADDRESS,
-        credentials=credentials,
-        autodiscover=True,
-        access_type=DELEGATE
-    )
-    # Connect the Azure SQL
+    # Connect to the Azure SQL
     conn, cursor = connect_to_db(CONNECTION_STRING)
     print("Connected. Loading the Information from Database...")
     table_dict, all_tables = get_all_table_primary_keys(cursor)
 
-    all_unread_emails = account.inbox.filter(is_read=False).order_by('-datetime_received')
-    filtered_unread_emails = [
-        email for email in all_unread_emails
-        if email.sender and email.sender.email_address and
-        any(email.sender.email_address.strip().lower().endswith(domain) for domain in DESIRED_DOMAINS)
-    ]
-    if filtered_unread_emails:
-        process_email_attachments(cursor, filtered_unread_emails, table_dict)
-    else:
-        print("No New Emails received.")
+    # Process files in the specified directory
+    process_files_in_directory(FILE_DIR, cursor, table_dict)
 
     # Upload the Temperature data
     print("Uploading the Recent Temperature to Azure. Please Wait..")
