@@ -32,8 +32,8 @@ def connect_to_db(conn_str):
 
 
 def get_latest_datetime_for_meter(cursor, meter):
-    """Fetch the latest datetime for a given meter from the Apollo_5MINS table."""
-    query = f"SELECT MAX([DateTime]) FROM Apollo_5MINS WHERE [Meter] = ?"
+    """Fetch the latest datetime for a given meter from the Apollo_Units table."""
+    query = f"SELECT MAX([DateTime]) FROM Apollo_Units WHERE [Meter] = ?"
     cursor.execute(query, meter)
     result = cursor.fetchone()
     return result[0] if result[0] else None
@@ -59,10 +59,12 @@ def process_csv_files(file_path, cursor):
         print(f"No new rows to insert for file: {file_path}")
         return
 
-    # Upload the processed data to Azure SQL
     try:
-        processed_data.to_sql('Apollo_5MINS', engine, if_exists='append', index=False)
+        print("Start to Upload...")
+        processed_data.to_sql('Apollo_Units', engine, if_exists='append', index=False)
         print(f"Insert Successful for file: {file_path}")
+        os.remove(file_path)
+        print(f"File deleted: {file_path}")
     except pyodbc.Error as e:
         print(e)
 

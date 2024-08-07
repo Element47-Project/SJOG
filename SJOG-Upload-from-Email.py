@@ -17,7 +17,7 @@ from Apollo import upload_apollo
 # Load environment variables
 load_dotenv()
 # Change the desired domains as requirements.
-DESIRED_DOMAINS = ['@gmail.com', 'element47.com.au']
+DESIRED_DOMAINS = ['@gmail.com', '@element47.com.au']
 # All settings in the .env file, including SQL and Email information.
 EMAIL_ADDRESS = 'element47testing@outlook.com'
 PASSWORD = os.environ.get('PASSWORD')

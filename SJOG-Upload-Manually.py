@@ -183,6 +183,14 @@ def upload_dataframe_to_azure_sql(df, table_name, cursor, table_dict):
     print(f"Uploading Data to {table_name}. Please Wait...")
     primary_keys = table_dict[table_name]
 
+    if table_name == 'TestingBilling':
+        try:
+            df.to_sql(table_name, engine, if_exists='append', index=False)
+            print("Insert Successful")
+        except pyodbc.Error as e:
+            print(e)
+        return 1
+
     if len(primary_keys) == 1:
         pk_col = primary_keys[0]
         cursor.execute(f"SELECT TOP 1 [{pk_col}] FROM [{table_name}] ORDER BY [{pk_col}] DESC")
