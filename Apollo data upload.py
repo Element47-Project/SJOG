@@ -63,8 +63,6 @@ def process_csv_files(file_path, cursor):
         print("Start to Upload...")
         processed_data.to_sql('Apollo_Units', engine, if_exists='append', index=False)
         print(f"Insert Successful for file: {file_path}")
-        os.remove(file_path)
-        print(f"File deleted: {file_path}")
     except pyodbc.Error as e:
         print(e)
 
