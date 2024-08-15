@@ -7,6 +7,7 @@ import openpyxl
 import xlrd
 from Gas_csv_Formatting import consumption
 from Elec_csv_Formatting import e_formatting
+from Gas_billing_csv_Formatting import gb_formatting
 import requests
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
@@ -136,6 +137,10 @@ def process_csv_file(file_path, table_dict, cursor):
         df_csv = e_formatting(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
         delete_file(file_path)
+    elif 'NET_CHARGE' in csv_header:
+        df_csv = gb_formatting(csv_data)
+        upload_dataframe_to_azure_sql(df_csv, 'TestingGasBill', cursor, table_dict)
+        delete_file(file_path)
     elif 'LogRecNum' in csv_header:
         try:
             df_csv = upload_apollo(csv_data, file_name_without_extension)
@@ -171,7 +176,7 @@ def process_files_in_directory(directory, cursor, table_dict):
         file_path = os.path.join(directory, filename)
         _, extension = os.path.splitext(filename)
         print(f"Processing file: {filename}")
-        if extension in ['.xlsx', '.xls']:
+        if extension in ['.xlsx', '.xls', '.xlsm']:
             process_xlsx_file(file_path, table_dict, cursor)
         elif extension == '.csv':
             process_csv_file(file_path, table_dict, cursor)

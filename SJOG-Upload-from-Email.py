@@ -8,6 +8,7 @@ import openpyxl
 import xlrd
 from Gas_csv_Formatting import consumption
 from Elec_csv_Formatting import e_formatting
+from Gas_billing_csv_Formatting import gb_formatting
 import requests
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
@@ -131,6 +132,10 @@ def process_csv_attachments(attachment, table_dict, cursor):
     elif 'Unit Of Measure' in csv_header:
         df_csv = e_formatting(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
+    elif 'NET_CHARGE' in csv_header:
+        df_csv = gb_formatting(csv_data)
+        upload_dataframe_to_azure_sql(df_csv, 'TestingGasBill', cursor, table_dict)
+        
     elif 'LogRecNum' in csv_header:
         try:
             df_csv = upload_apollo(csv_data, file_name_without_extension)
