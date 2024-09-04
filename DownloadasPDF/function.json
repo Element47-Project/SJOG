@@ -5,7 +5,7 @@
         "type": "httpTrigger",
         "direction": "in",
         "name": "req",
-        "route": "Apollodownload",  
+        "route": "DownloadasPDF",  
         "methods": ["get", "post"]
       },
       {
