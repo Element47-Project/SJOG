@@ -57,13 +57,25 @@ def process_csv_files(file_path, cursor):
 
     if processed_data.empty:
         print(f"No new rows to insert for file: {file_path}")
+        delete_file(file_path)
         return
 
     try:
         print("Start to Upload...")
         processed_data.to_sql('Apollo_Units', engine, if_exists='append', index=False)
         print(f"Insert Successful for file: {file_path}")
+        delete_file(file_path)
     except pyodbc.Error as e:
+        print(e)
+
+
+def delete_file(file_path):
+    """Delete the file at the specified file path."""
+    try:
+        os.remove(file_path)
+        print(f"Deleted file: {file_path}")
+    except OSError as e:
+        print(f"Error deleting file: {file_path}")
         print(e)
 
 

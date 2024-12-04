@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 import tabula
 from Apollo import upload_apollo
+from Gas_Formatting import gas_consumption
 
 # Load environment variables
 load_dotenv()
@@ -125,10 +126,17 @@ def process_csv_file(file_path, table_dict, cursor):
     if file_name_without_extension in table_dict:
         upload_dataframe_to_azure_sql(csv_data, file_name_without_extension, cursor, table_dict)
         delete_file(file_path)
+    elif 'Carbon Neutral Charge' in csv_header:
+        df_csv = gas_consumption(csv_data)
+        upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
+        delete_file(file_path)
     elif 'CONSUMPTION_HR01' in csv_header:
         df_csv = consumption(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
         delete_file(file_path)
+    elif 'Zero_Flag' in csv_header:
+        print(csv_data.columns)
+        upload_dataframe_to_azure_sql(csv_data, 'TestingWWaste', cursor, table_dict)
     elif 'GAS (GJ)' in csv_header:
         upload_dataframe_to_azure_sql(csv_data, 'TestingGas', cursor, table_dict)
         delete_file(file_path)
@@ -171,7 +179,7 @@ def process_files_in_directory(directory, cursor, table_dict):
         file_path = os.path.join(directory, filename)
         _, extension = os.path.splitext(filename)
         print(f"Processing file: {filename}")
-        if extension in ['.xlsx', '.xls']:
+        if extension in ['.xlsx', '.xls', 'xlsm']:
             process_xlsx_file(file_path, table_dict, cursor)
         elif extension == '.csv':
             process_csv_file(file_path, table_dict, cursor)
