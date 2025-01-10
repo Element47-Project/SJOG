@@ -1,102 +1,132 @@
-import os
-import io
 import pandas as pd
-import pyodbc
-from dotenv import load_dotenv
+import numpy as np
 from sqlalchemy import create_engine
-from datetime import datetime, timedelta
-from Apollo import upload_apollo
+from sqlalchemy.sql import text
+from dotenv import load_dotenv
+import os
 
 # Load environment variables
 load_dotenv()
-
-# SQL settings
 SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
 SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
 SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
+FILE_DIR = os.environ.get('FILE_ADDRESS')
 
-engine = create_engine(
-    f'mssql+pyodbc://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_SERVER}/{SQL_DB_NAME}?driver=ODBC+Driver+18+for+SQL+Server')
-CONNECTION_STRING = (
-    f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={SQL_SERVER};'
-    f'DATABASE={SQL_DB_NAME};UID={SQL_USERNAME};PWD={SQL_PASSWORD}'
-)
+# Setup connection engine and connection string
+engine = create_engine(f'mssql+pyodbc://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_SERVER}/{SQL_DB_NAME}'
+                       f'?driver=ODBC+Driver+18+for+SQL+Server')
+
+# Parameters
+start_date = "2024-07-25"  # Modify as needed
+end_date = "2024-12-19"  # Modify as needed
+table_name = "Meter_Output_Detail"
+
+# Specify the 6 meters to exclude
+excluded_meters = [
+    "RMT-APL-01-MSB-MSB-01-40002624-DL1",
+    "RMT-APL-01-MSB-MDB1-01-75000025-DL1",
+    "RMT-APL-01-MDB2-3-MDB2-3-01-75000043-DL1",
+    "RMT-APL-01-MDB4-5-MDB4-5-01-75000038-DL1",
+    "RMT-APL-01-MSB-UMS-01-75000029-DL1",
+    "RMT-APL-01-MSB-CMON-01-75000040-DL1"
+]
+
+# Step 1: Fetch data from the database
+query = f"""
+SELECT * 
+FROM {table_name}
+WHERE DateTime >= '{start_date}' 
+  AND DateTime <= '{end_date}'
+"""
+data = pd.read_sql(query, engine)
 
 
-def connect_to_db(conn_str):
-    """Establishes a connection to the database."""
-    conn = pyodbc.connect(conn_str)
-    cursor = conn.cursor()
-    return conn, cursor
+# Cleaning Logic
+def detect_outliers_by_difference(df, columns, group_col, threshold=200):
+    """
+    Detect and handle outliers based on the difference in specified columns.
+    """
+    df_copy = df.copy()
+
+    for col in columns:
+        df_copy = df_copy.sort_values([group_col, 'DateTime'])
+        df_copy[f'{col}_diff'] = df_copy.groupby(group_col)[col].diff()
+        outliers = (df_copy[f'{col}_diff'].abs() > threshold) | (df_copy[f'{col}_diff'].abs().shift(-1) > threshold)
+        df_copy.loc[outliers, col] = np.nan
+        df_copy = df_copy.drop(f'{col}_diff', axis=1)
+
+    return df_copy
 
 
-def get_latest_datetime_for_meter(cursor, meter):
-    """Fetch the latest datetime for a given meter from the Apollo_Units table."""
-    query = f"SELECT MAX([DateTime]) FROM Apollo_Units WHERE [Meter] = ?"
-    cursor.execute(query, meter)
-    result = cursor.fetchone()
-    return result[0] if result[0] else None
+def clean_meter_data(df):
+    """
+    Cleans the meter data, filling missing values, handling outliers,
+    and calculating differences for kWh_IMP.
+    """
+    process_cols = ['kWh_IMP']
+
+    # Replace zero values with NaN for processing
+    df[process_cols] = df[process_cols].replace(0, np.nan)
+
+    # Detect and handle outliers
+    df = detect_outliers_by_difference(df, process_cols, group_col='Meter', threshold=200)
+
+    # Forward-fill and backward-fill missing values within each meter group
+    df[process_cols] = df.groupby('Meter')[process_cols].ffill().bfill()
+
+    # Calculate previous values (Prev_kWh_IMP)
+    df['Prev_kWh_IMP'] = df.groupby('Meter')['kWh_IMP'].shift(1)
+
+    # Calculate differences (Diff_kWh_IMP)
+    df['Diff_kWh_IMP'] = df['kWh_IMP'] - df['Prev_kWh_IMP']
+    df['Diff_KWH_IMP'] = df['Diff_kWh_IMP']
+
+    # Set kWh_EXP to None
+    if 'kWh_EXP' in df.columns:
+        df['kWh_EXP'] = None
+
+    return df
 
 
-def process_csv_files(file_path, cursor):
-    """Processes CSV files and uploads them to Apollo_5MINS."""
-    filename = os.path.splitext(os.path.basename(file_path))[0]
-    csv_data = pd.read_csv(file_path)
+# Step 2: Clean the data
+cleaned_data = clean_meter_data(data)
 
-    # Process the CSV data using upload_apollo function
-    processed_data = upload_apollo(csv_data, filename)
+# Exclude the first row for each Meter group
+cleaned_data = cleaned_data.groupby('Meter').apply(lambda group: group.iloc[1:]).reset_index(drop=True)
 
-    # Fetch the latest datetime for the meter from the database
-    latest_datetime = get_latest_datetime_for_meter(cursor, filename)
+# Drop the 'Diff_kWh_IMP' column
+cleaned_data.drop(columns=['Diff_kWh_IMP'], inplace=True)
 
-    if latest_datetime:
-        latest_datetime += timedelta(seconds=2)
-        processed_data['DateTime'] = pd.to_datetime(processed_data['DateTime'], errors='coerce')
-        processed_data = processed_data[processed_data['DateTime'] > latest_datetime]
-
-    if processed_data.empty:
-        print(f"No new rows to insert for file: {file_path}")
-        delete_file(file_path)
-        return
-
+# Step 3: Process all meters except the excluded ones
+with engine.begin() as conn:
     try:
-        print("Start to Upload...")
-        processed_data.to_sql('Apollo_Units', engine, if_exists='append', index=False)
-        print(f"Insert Successful for file: {file_path}")
-        delete_file(file_path)
-    except pyodbc.Error as e:
-        print(e)
+        # Get unique meters from the cleaned data
+        unique_meters = cleaned_data['Meter'].unique()
 
+        for meter in unique_meters:
+            if meter in excluded_meters:
+                print(f"Skipping Meter: {meter}")
+                continue
 
-def delete_file(file_path):
-    """Delete the file at the specified file path."""
-    try:
-        os.remove(file_path)
-        print(f"Deleted file: {file_path}")
-    except OSError as e:
-        print(f"Error deleting file: {file_path}")
-        print(e)
+            # Delete data for each meter
+            delete_query = f"""
+            DELETE FROM {table_name}
+            WHERE Meter = '{meter}' 
+              AND DateTime >= '{start_date}' 
+              AND DateTime <= '{end_date}'
+            """
+            conn.execute(text(delete_query))
+            print(f"Rows deleted successfully for Meter: {meter} between {start_date} and {end_date}")
 
+            # Filter cleaned data for the current meter
+            meter_data = cleaned_data[cleaned_data['Meter'] == meter]
 
-def main():
-    directory_path = 'Apollo\Data'
-    print("Connecting to SQL Database...")
-    conn, cursor = connect_to_db(CONNECTION_STRING)
-    print("Connected. Loading the Information from Database...")
+            # Upload cleaned data for the current meter
+            meter_data.to_sql(table_name, con=conn, if_exists='append', index=False)
+            print(f"Cleaned data uploaded successfully for Meter: {meter}")
 
-    for root, dirs, files in os.walk(directory_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            print(f"Processing file: {file_path}")
-            extension = os.path.splitext(file)[1].lower()
-            if extension == '.csv':
-                process_csv_files(file_path, cursor)
-
-    cursor.close()
-    conn.close()
-    print("All files have been processed and uploaded.")
-
-
-if __name__ == "__main__":
-    main()
+    except Exception as e:
+        # Rollback is automatic with `engine.begin()` context manager
+        print(f"Error occurred while processing meters: {e}")
+        raise

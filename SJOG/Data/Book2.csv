@@ -1,0 +1,22 @@
+Bundled_Tariff,Fixed_Price,Anytime_Rate,On_Peak_Rate,Off_Peak_Rate,Shoulder_Rate,Overnight_Rate,Super_Off_Peak_Rate,Demand,StartDate
+Reference tariff 1,108.665,9.334,0,0,0,,,,01/07/2024
+Reference tariff 2,206.05,12.824,0,0,0,,,,01/07/2024
+Reference tariff 3,108.665,0,19.613,4.835,0,,,,01/07/2024
+Reference tariff 4,377.214,0,21.137,5.446,0,,,,01/07/2024
+Reference tariff 9,7.951,5.442,0,0,0,,,,01/07/2024
+Reference tariff 10,63.799,5.225,0,0,0,,,,01/07/2024
+Reference tariff 13,108.665,9.334,0,0,0,,,,01/07/2024
+Reference tariff 14,206.05,12.824,0,0,0,,,,01/07/2024
+Reference tariff 15,108.665,0,19.613,4.835,0,,,,01/07/2024
+Reference tariff 16,377.214,0,21.137,5.446,0,,,,01/07/2024
+Reference tariff 17,108.665,0,15.021,6.196,8.602,,,,01/07/2024
+Reference tariff 18,214.788,0,22.84,10.314,14.548,,,,01/07/2024
+Reference tariff 19,108.665,,12.985,5.141,7.582,,,6.551,01/07/2024
+Reference tariff 20,258.665,,21.579,9.149,12.619,,,7.829,01/07/2024
+Reference tariff 21,108.665,,14.965,6.276,8.412,6.276,0,0,01/07/2024
+Reference tariff 22,206.05,,23.608,9.36,12.713,9.36,9.36,0,01/07/2024
+Reference tariff 34,206.05,,20.985,8.072,10.493,0,5.341,0,01/07/2024
+Reference tariff 35,108.665,,16.348,6.288,8.174,0,0.106,0,01/07/2024
+Reference tariff 36,342.079,,19.044,7.325,9.522,0,5.341,7.374,01/07/2024
+Reference tariff 37,108.665,,13.687,5.265,6.844,0,0.106,6.131,01/07/2024
+Apollo,0.88,0.280109091,,,,,,,01/07/2024

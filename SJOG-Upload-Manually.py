@@ -135,8 +135,10 @@ def process_csv_file(file_path, table_dict, cursor):
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
         delete_file(file_path)
     elif 'Zero_Flag' in csv_header:
-        print(csv_data.columns)
         upload_dataframe_to_azure_sql(csv_data, 'TestingWWaste', cursor, table_dict)
+    elif 'ParentMeter' in csv_header:
+        csv_data = csv_data.dropna(subset=['Meter'])
+        upload_dataframe_to_azure_sql(csv_data, 'Meter_Table', cursor, table_dict)
     elif 'GAS (GJ)' in csv_header:
         upload_dataframe_to_azure_sql(csv_data, 'TestingGas', cursor, table_dict)
         delete_file(file_path)

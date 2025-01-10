@@ -26,79 +26,80 @@ CONNECTION_STRING = (
     f'DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={SQL_SERVER};'
     f'DATABASE={SQL_DB_NAME};UID={SQL_USERNAME};PWD={SQL_PASSWORD}'
 )
-ALL_UNITS_METERS = {
-    "RMT-APL-01-MSB-APR11-01-50002646-DL1",
-    "RMT-APL-01-MSB-APR12-01-50002646-DL2",
-    "RMT-APL-01-MSB-APR13-01-50002646-DL3",
-    "RMT-APL-01-MSB-APR14-01-50002728-DL1",
-    "RMT-APL-01-MSB-APR15-01-50002728-DL2",
-    "RMT-APL-01-MSB-APR37-01-50002764-DL1",
-    "RMT-APL-01-MSB-APR38-01-50002764-DL2",
-    "RMT-APL-01-MSB-APR39-01-50002764-DL3",
+APOLLO_UNITS_METERS = {
     "RMT-APL-01-MSB-APR73-01-50002728-DL3",
-    "RMT-APL-01-MDB1-APR01-01-50002745-DL1",
-    "RMT-APL-01-MDB1-APR02-01-50002745-DL2",
-    "RMT-APL-01-MDB1-APR03-01-50002745-DL3",
-    "RMT-APL-01-MDB1-APR04-01-50002756-DL1",
-    "RMT-APL-01-MDB1-APR05-01-50002756-DL2",
-    "RMT-APL-01-MDB1-APR06-01-50002756-DL3",
-    "RMT-APL-01-MDB1-APR07-01-50002692-DL1",
-    "RMT-APL-01-MDB1-APR08-01-50002692-DL2",
-    "RMT-APL-01-MDB1-APR09-01-50002692-DL3",
-    "RMT-APL-01-MDB1-APR10-01-50002676-DL1",
-    "RMT-APL-01-MDB2-APR27-01-50002663-DL1",
-    "RMT-APL-01-MDB2-APR28-01-50002663-DL2",
-    "RMT-APL-01-MDB2-APR29-01-50002663-DL3",
-    "RMT-APL-01-MDB2-APR30-01-50002733-DL1",
-    "RMT-APL-01-MDB2-APR31-01-50002733-DL2",
-    "RMT-APL-01-MDB2-APR32-01-50002733-DL3",
-    "RMT-APL-01-MDB2-APR34-01-50002751-DL2",
-    "RMT-APL-01-MDB2-APR35-01-50002751-DL3",
-    "RMT-APL-01-MDB2-APR36-01-50002683-DL1",
-    "RMT-APL-01-MDB3-APR16-01-50002687-DL1",
-    "RMT-APL-01-MDB3-APR17-01-50002687-DL2",
-    "RMT-APL-01-MDB3-APR18-01-50002687-DL3",
-    "RMT-APL-01-MDB3-APR19-01-50002760-DL1",
-    "RMT-APL-01-MDB3-APR20-01-50002760-DL2",
-    "RMT-APL-01-MDB3-APR21-01-50002760-DL3",
-    "RMT-APL-01-MDB3-APR22-01-50002668-DL1",
-    "RMT-APL-01-MDB3-APR23-01-50002668-DL2",
-    "RMT-APL-01-MDB3-APR24-01-50002668-DL3",
-    "RMT-APL-01-MDB3-APR25-01-50002685-DL1",
-    "RMT-APL-01-MDB3-APR26-01-50002685-DL2",
-    "RMT-APL-01-MDB4-APR40-01-50002690-DL1",
-    "RMT-APL-01-MDB4-APR41-01-50002690-DL2",
-    "RMT-APL-01-MDB4-APR42-01-50002690-DL3",
-    "RMT-APL-01-MDB4-APR43-01-50002684-DL1",
-    "RMT-APL-01-MDB4-APR44-01-50002684-DL2",
-    "RMT-APL-01-MDB4-APR45-01-50002684-DL3",
-    "RMT-APL-01-MDB4-APR46-01-50002725-DL1",
-    "RMT-APL-01-MDB4-APR47-01-50002725-DL2",
-    "RMT-APL-01-MDB4-APR65-01-50002681-DL1",
-    "RMT-APL-01-MDB4-APR66-01-50002681-DL2",
-    "RMT-APL-01-MDB4-APR67-01-50002681-DL3",
-    "RMT-APL-01-MDB4-APR68-01-50002747-DL1",
-    "RMT-APL-01-MDB4-APR69-01-50002747-DL2",
-    "RMT-APL-01-MDB4-APR70-01-50002747-DL3",
-    "RMT-APL-01-MDB4-APR71-01-50002975-DL1",
-    "RMT-APL-01-MDB4-APR72-01-50002975-DL2",
-    "RMT-APL-01-MDB5-APR48-01-50002673-DL1",
-    "RMT-APL-01-MDB5-APR49-01-50002673-DL2",
-    "RMT-APL-01-MDB5-APR50-01-50002673-DL3",
-    "RMT-APL-01-MDB5-APR51-01-50002759-DL1",
-    "RMT-APL-01-MDB5-APR52-01-50002759-DL2",
-    "RMT-APL-01-MDB5-APR53-01-50002759-DL3",
-    "RMT-APL-01-MDB5-APR54-01-50002686-DL1",
-    "RMT-APL-01-MDB5-APR55-01-50002686-DL2",
-    "RMT-APL-01-MDB5-APR56-01-50002686-DL3",
-    "RMT-APL-01-MDB5-APR57-01-50002561-DL1",
-    "RMT-APL-01-MDB5-APR58-01-50002561-DL2",
-    "RMT-APL-01-MDB5-APR59-01-50002561-DL3",
-    "RMT-APL-01-MDB5-APR60-01-50002758-DL1",
-    "RMT-APL-01-MDB5-APR61-01-50002758-DL2",
-    "RMT-APL-01-MDB5-APR62-01-50002758-DL3",
-    "RMT-APL-01-MDB5-APR63-01-50002679-DL1",
+    "RMT-APL-01-MSB-APR39-01-50002764-DL3",
+    "RMT-APL-01-MSB-APR38-01-50002764-DL2",
+    "RMT-APL-01-MSB-APR37-01-50002764-DL1",
+    "RMT-APL-01-MSB-APR15-01-50002728-DL2",
+    "RMT-APL-01-MSB-APR14-01-50002728-DL1",
+    "RMT-APL-01-MSB-APR13-01-50002646-DL3",
+    "RMT-APL-01-MSB-APR12-01-50002646-DL2",
+    "RMT-APL-01-MSB-APR11-01-50002646-DL1",
     "RMT-APL-01-MDB5-APR64-01-50002679-DL2",
+    "RMT-APL-01-MDB5-APR63-01-50002679-DL1",
+    "RMT-APL-01-MDB5-APR62-01-50002758-DL3",
+    "RMT-APL-01-MDB5-APR61-01-50002758-DL2",
+    "RMT-APL-01-MDB5-APR60-01-50002758-DL1",
+    "RMT-APL-01-MDB5-APR59-01-50002561-DL3",
+    "RMT-APL-01-MDB5-APR58-01-50002561-DL2",
+    "RMT-APL-01-MDB5-APR57-01-50002561-DL1",
+    "RMT-APL-01-MDB5-APR56-01-50002686-DL3",
+    "RMT-APL-01-MDB5-APR55-01-50002686-DL2",
+    "RMT-APL-01-MDB5-APR54-01-50002686-DL1",
+    "RMT-APL-01-MDB5-APR53-01-50002759-DL3",
+    "RMT-APL-01-MDB5-APR52-01-50002759-DL2",
+    "RMT-APL-01-MDB5-APR51-01-50002759-DL1",
+    "RMT-APL-01-MDB5-APR50-01-50002673-DL3",
+    "RMT-APL-01-MDB5-APR49-01-50002673-DL2",
+    "RMT-APL-01-MDB5-APR48-01-50002673-DL1",
+    "RMT-APL-01-MDB4-APR72-01-50002975-DL2",
+    "RMT-APL-01-MDB4-APR71-01-50002975-DL1",
+    "RMT-APL-01-MDB4-APR70-01-50002747-DL3",
+    "RMT-APL-01-MDB4-APR69-01-50002747-DL2",
+    "RMT-APL-01-MDB4-APR68-01-50002747-DL1",
+    "RMT-APL-01-MDB4-APR67-01-50002681-DL3",
+    "RMT-APL-01-MDB4-APR66-01-50002681-DL2",
+    "RMT-APL-01-MDB4-APR65-01-50002681-DL1",
+    "RMT-APL-01-MDB4-APR47-01-50002725-DL2",
+    "RMT-APL-01-MDB4-APR46-01-50002725-DL1",
+    "RMT-APL-01-MDB4-APR45-01-50002684-DL3",
+    "RMT-APL-01-MDB4-APR44-01-50002684-DL2",
+    "RMT-APL-01-MDB4-APR43-01-50002684-DL1",
+    "RMT-APL-01-MDB4-APR42-01-50002690-DL3",
+    "RMT-APL-01-MDB4-APR41-01-50002690-DL2",
+    "RMT-APL-01-MDB4-APR40-01-50002690-DL1",
+    "RMT-APL-01-MDB3-APR26-01-50002685-DL2",
+    "RMT-APL-01-MDB3-APR25-01-50002685-DL1",
+    "RMT-APL-01-MDB3-APR24-01-50002668-DL3",
+    "RMT-APL-01-MDB3-APR23-01-50002668-DL2",
+    "RMT-APL-01-MDB3-APR22-01-50002668-DL1",
+    "RMT-APL-01-MDB3-APR21-01-50002760-DL3",
+    "RMT-APL-01-MDB3-APR20-01-50002760-DL2",
+    "RMT-APL-01-MDB3-APR19-01-50002760-DL1",
+    "RMT-APL-01-MDB3-APR18-01-50002687-DL3",
+    "RMT-APL-01-MDB3-APR17-01-50002687-DL2",
+    "RMT-APL-01-MDB3-APR16-01-50002687-DL1",
+    "RMT-APL-01-MDB2-APR36-01-50002683-DL1",
+    "RMT-APL-01-MDB2-APR35-01-50002751-DL3",
+    "RMT-APL-01-MDB2-APR34-01-50002751-DL2",
+    "RMT-APL-01-MDB2-APR33-01-50002751-DL1",
+    "RMT-APL-01-MDB2-APR32-01-50002733-DL3",
+    "RMT-APL-01-MDB2-APR31-01-50002733-DL2",
+    "RMT-APL-01-MDB2-APR30-01-50002733-DL1",
+    "RMT-APL-01-MDB2-APR29-01-50002663-DL3",
+    "RMT-APL-01-MDB2-APR28-01-50002663-DL2",
+    "RMT-APL-01-MDB2-APR27-01-50002663-DL1",
+    "RMT-APL-01-MDB1-APR10-01-50002676-DL1",
+    "RMT-APL-01-MDB1-APR09-01-50002692-DL3",
+    "RMT-APL-01-MDB1-APR08-01-50002692-DL2",
+    "RMT-APL-01-MDB1-APR07-01-50002692-DL1",
+    "RMT-APL-01-MDB1-APR06-01-50002756-DL3",
+    "RMT-APL-01-MDB1-APR05-01-50002756-DL2",
+    "RMT-APL-01-MDB1-APR04-01-50002756-DL1",
+    "RMT-APL-01-MDB1-APR03-01-50002745-DL3",
+    "RMT-APL-01-MDB1-APR02-01-50002745-DL2",
+    "RMT-APL-01-MDB1-APR01-01-50002745-DL1",
 }
 
 ALL_MAIN_METERS = {
@@ -125,108 +126,99 @@ def detect_outliers_by_difference(df, columns, group_col, threshold=200):
 
 
 def process_data_for_date(date=None):
-    if date is None:
-        date = datetime.today().date() - timedelta(days=1)
-    else:
-        date = datetime.strptime(date, "%Y-%m-%d").date()
-
     conn = None
     try:
+        # If date is not provided, default to yesterday
+        if not date:
+            date = (datetime.today().date() - timedelta(days=1)).strftime("%Y-%m-%d")
+
         conn = pyodbc.connect(CONNECTION_STRING)
         cursor = conn.cursor()
         conn.autocommit = False
 
-        # Step 1: Delete existing data for the given date from ApolloTesting2
-        delete_query = f"""
-            DELETE FROM [dbo].[ApolloTesting2]
-            WHERE CONVERT(date, [DateTime]) = '{date}';
-        """
-        cursor.execute(delete_query)
-        logging.info(f"Deleted existing data for {date} from ApolloTesting2.")
+        logging.info(f"Starting data processing for {date}...")
 
-        # Step 2: Copy data from ApolloTesting to ApolloTesting2
+        # Step 1: Backup and delete existing data
         backup_query = f"""
             INSERT INTO [dbo].[ApolloTesting2]
             SELECT * FROM [dbo].[ApolloTesting]
             WHERE CONVERT(date, [DateTime]) = '{date}';
         """
-        cursor.execute(backup_query)
-        conn.commit()
-        logging.info(f"Backup completed for {date} from ApolloTesting to ApolloTesting2.")
-
-        # Step 3: Fetch the data for verification
+        delete_query = f"""
+            DELETE FROM [dbo].[ApolloTesting]
+            WHERE CONVERT(date, [DateTime]) = '{date}';
+        """
         query = f"""
             SELECT * FROM [dbo].[ApolloTesting]
             WHERE CONVERT(date, [DateTime]) = '{date}';
         """
         df = pd.read_sql(query, engine)
+        cursor.execute(backup_query)
+        conn.commit()
+        logging.info(f"Backup and delete operations completed for {date}.")
 
         if df.empty:
             logging.warning(f"No data found for {date}.")
             return
 
-        # Step 2.1: Check for missing meters
+        # Step 3: Check for missing meters
         existing_meters = set(df['Meter'].unique())
-        missing_meters = ALL_UNITS_METERS - existing_meters
+        missing_meters = APOLLO_UNITS_METERS - existing_meters
         if missing_meters:
             logging.warning(f"Missing meters for {date}: {missing_meters}")
 
-        # Step 3: Delete existing data for the date
-        delete_query = f"DELETE FROM [dbo].[ApolloTesting] WHERE CONVERT(date, [DateTime]) = '{date}'"
-        cursor.execute(delete_query)
-        conn.commit()
-
-        # Step 4: Clean and preprocess data
+        # Step 4: Clean data
         cols_to_clean = ['kWh_IMP', 'kvarh_IMP', 'kvarh_EXP', 'kVAh']
         df[cols_to_clean] = df[cols_to_clean].replace(0, np.nan)
-
-        # Detect and handle outliers
         df = detect_outliers_by_difference(df, cols_to_clean, group_col='Meter', threshold=200)
         df[cols_to_clean] = df.groupby('Meter')[cols_to_clean].ffill().bfill()
 
-        # Step 5: Add previous day's values for the first row of each Meter
+        # Step 5: Add previous day's values
         prev_entry_query = f"""
             SELECT [Meter], [kWh_IMP], [kvarh_IMP], [kvarh_EXP], [kVAh]
-            FROM [dbo].[ApolloTesting] AS main
+            FROM [dbo].[ApolloTesting]
             WHERE [DateTime] = (
                 SELECT MAX([DateTime])
-                FROM [dbo].[ApolloTesting] AS sub
-                WHERE sub.[DateTime] < '{date}' AND sub.[Meter] = main.[Meter]
-            )
+                FROM [dbo].[ApolloTesting]
+                WHERE [DateTime] < '{date}' AND [Meter] = Meter
+            );
         """
         prev_day_df = pd.read_sql(prev_entry_query, engine)
-        df = df.sort_values(by=['Meter', 'DateTime'])
 
         for meter in df['Meter'].unique():
             prev_row = prev_day_df[prev_day_df['Meter'] == meter]
             if not prev_row.empty:
                 mask = (df['Meter'] == meter) & (df['DateTime'] == df[df['Meter'] == meter]['DateTime'].min())
-                df.loc[mask, 'Prev_kWh_IMP'] = prev_row['kWh_IMP'].values[0]
-                df.loc[mask, 'Prev_kvarh_IMP'] = prev_row['kvarh_IMP'].values[0]
-                df.loc[mask, 'Prev_kvarh_EXP'] = prev_row['kvarh_EXP'].values[0]
-                df.loc[mask, 'Prev_kVAh'] = prev_row['kVAh'].values[0]
-        df = df.drop_duplicates(subset=['DateTime', 'Meter'], keep='last')
-        # Calculate previous values for the rest of the day
+                for col in ['kWh_IMP', 'kvarh_IMP', 'kvarh_EXP', 'kVAh']:
+                    df.loc[mask, f'Prev_{col}'] = prev_row[col].values[0]
+
         df['Prev_kWh_IMP'] = df.groupby('Meter')['kWh_IMP'].shift(1).fillna(df['Prev_kWh_IMP'])
         df['Prev_kvarh_IMP'] = df.groupby('Meter')['kvarh_IMP'].shift(1).fillna(df['Prev_kvarh_IMP'])
         df['Prev_kvarh_EXP'] = df.groupby('Meter')['kvarh_EXP'].shift(1).fillna(df['Prev_kvarh_EXP'])
         df['Prev_kVAh'] = df.groupby('Meter')['kVAh'].shift(1).fillna(df['Prev_kVAh'])
 
         # Step 6: Calculate differences
-        df['KWH_IMP_Diff'] = df['kWh_IMP'] - df['Prev_kWh_IMP']
-        df['kvarh_IMP_Diff'] = df['kvarh_IMP'] - df['Prev_kvarh_IMP']
-        df['kvarh_EXP_Diff'] = df['kvarh_EXP'] - df['Prev_kvarh_EXP']
-        df['kVAh_Diff'] = df['kVAh'] - df['Prev_kVAh']
+        for col in cols_to_clean:
+            df[f'{col}_Diff'] = df[col] - df[f'Prev_{col}']
+            df[f'{col}_Diff'] = df[f'{col}_Diff'].fillna(0)
 
-        # Step 7: Upload cleaned data back to ApolloTesting
-        df_to_upload = df[['DateTime', 'Meter', 'kWh_IMP', 'Prev_kWh_IMP', 'KWH_IMP_Diff',
-                           'kWh_EXP', 'kvarh_IMP', 'Prev_kvarh_IMP', 'kvarh_IMP_Diff',
-                           'kvarh_EXP', 'Prev_kvarh_EXP', 'kvarh_EXP_Diff', 'kVAh',
-                           'Prev_kVAh', 'kVAh_Diff', 'V', 'I', 'kW', 'I_THD']]
+        # Step 7: Include all columns for upload
+        upload_cols = [
+            'DateTime', 'kWh_IMP', 'Prev_kWh_IMP', 'KWH_IMP_Diff',
+            'kWh_EXP', 'kvarh_IMP', 'Prev_kvarh_IMP', 'kvarh_IMP_Diff',
+            'kvarh_EXP', 'Prev_kvarh_EXP', 'kvarh_EXP_Diff',
+            'kVAh', 'Prev_kVAh', 'kVAh_Diff',
+            'V', 'I', 'kW', 'I_THD', 'Meter'
+        ]
+
+        df_to_upload = df[upload_cols]
+
+        cursor.execute(delete_query)
         df_to_upload.to_sql('ApolloTesting', con=engine, if_exists='append', index=False)
         conn.commit()
 
         logging.info(f"Successfully processed and uploaded data for {date}.")
+
     except Exception as e:
         if conn:
             conn.rollback()
@@ -257,17 +249,16 @@ def get_consumption(date_str):
 
         # Identify missing meters
         existing_meters = set(df['Meter'].unique())
-        missing_meters = ALL_UNITS_METERS - existing_meters
+        missing_meters = APOLLO_UNITS_METERS - existing_meters
 
         # Add missing meters with zero consumption
         if missing_meters:
             logging.info(f"Adding missing meters for {date_str}: {missing_meters}")
-            # Create a DataFrame for missing meters
+
             missing_data_df = pd.DataFrame(
                 [{'Date': date_str, 'Meter': meter, 'Consumption': 0.0} for meter in missing_meters])
 
-            # Check for non-empty DataFrame and exclude all-NA rows
-            if not missing_data_df.isna().all(axis=1).all():
+            if not missing_data_df.empty and not missing_data_df.isna().all(axis=1).all():
                 df = pd.concat([df, missing_data_df], ignore_index=True)
 
         # Ensure all meters are present and sorted
@@ -505,10 +496,8 @@ def upload_to_sql(df, table_name='Apollo_Invoice'):
 
 def main(start_date=None):
     try:
-        # Determine the start and end dates
-        if start_date is None:
-            logging.error("Start date is required to run the process.")
-            return
+        if not start_date:
+            start_date = (datetime.today().date() - timedelta(days=1)).strftime("%Y-%m-%d")
 
         start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
         yesterday_dt = datetime.today().date() - timedelta(days=1)
@@ -525,18 +514,17 @@ def main(start_date=None):
             consumption_data = get_consumption(process_date_str)
             if consumption_data is not None:
                 tariff_data = get_tariff(process_date_str)
-                if tariff_data is not None:
-                    invoice_data = calculate_invoice(consumption_data, tariff_data)
-                    upload_to_sql(invoice_data)
+                invoice_data = calculate_invoice(consumption_data, tariff_data)
+                upload_to_sql(invoice_data)
 
             # Step 2: Process main check meters
-            process_main_check_data(process_date_str)
-            consumption_data_main = get_main_check_consumption(process_date_str)
-            if consumption_data_main is not None:
-                tariff_data_main = get_tariff(process_date_str)
-                if tariff_data_main is not None:
-                    invoice_data_main = calculate_invoice(consumption_data_main, tariff_data_main)
-                    upload_to_sql(invoice_data_main)
+            # process_main_check_data(process_date_str)
+            # consumption_data_main = get_main_check_consumption(process_date_str)
+            # if consumption_data_main is not None:
+            #     tariff_data_main = get_tariff(process_date_str)
+            #     if tariff_data_main is not None:
+            #         invoice_data_main = calculate_invoice(consumption_data_main, tariff_data_main)
+            #         upload_to_sql(invoice_data_main)
 
             logging.info(f"Processing completed for {process_date_str}.")
             current_date += timedelta(days=1)
