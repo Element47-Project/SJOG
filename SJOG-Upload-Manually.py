@@ -149,7 +149,7 @@ def process_csv_file(file_path, table_dict, cursor):
     elif 'LogRecNum' in csv_header:
         try:
             df_csv = upload_apollo(csv_data, file_name_without_extension)
-            df_csv.to_sql('Apollo_5MINS', engine, if_exists='append', index=False)
+            df_csv.to_sql('Meter_Output_Detail', engine, if_exists='append', index=False)
             print("Insert Successful")
             delete_file(file_path)
         except pyodbc.Error as e:

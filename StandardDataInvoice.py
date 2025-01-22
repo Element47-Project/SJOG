@@ -6,7 +6,7 @@ import os
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 
-process_date = '2025-01-09'  # "%Y-%m-%d"
+process_date = '2025-01-17'  # "%Y-%m-%d"
 log_file_path = r"C:\Users\Shane\Desktop\Apllo\apollo_upload.log"
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -144,7 +144,7 @@ def fetch_meter_data_with_previous(meter, date):
         """
 
         prev_data = pd.read_sql(query.split(';')[0], engine)
-        if prev_data is None or prev_data.empty:
+        if prev_data.empty:
             prev_data = pd.DataFrame({
                 'DateTime': [pd.Timestamp('1900-01-01 00:00:00')],
                 'Meter': [meter],
@@ -156,18 +156,20 @@ def fetch_meter_data_with_previous(meter, date):
             logging.warning(f"No data for meter '{meter}' on date '{date}'.")
             return None, prev_data, None
 
-        # Ensure the columns match expected structure
-        combined_data = pd.concat([prev_data, curr_data]).sort_values(by='DateTime').reset_index(drop=True)
+        # Exclude empty or all-NA entries before concatenation
+        valid_dataframes = [df for df in [prev_data, curr_data] if not df.empty and not df.isna().all().all()]
+        combined_data = pd.concat(valid_dataframes).sort_values(by='DateTime').reset_index(drop=True)
 
+        # Ensure the columns match the expected structure
         required_columns = [
             'DateTime', 'kWh_IMP', 'kWh_EXP', 'kvarh_IMP',
             'kvarh_EXP', 'kVAh', 'V1', 'V2', 'V3', 'I1', 'I2', 'I3',
             'kW1', 'kW2', 'kW3', 'Meter'
         ]
-
         for column in required_columns:
             if column not in combined_data.columns:
                 combined_data[column] = 0
+
         return combined_data, prev_data, curr_data
 
     except Exception as e:
@@ -383,6 +385,7 @@ def main(date):
         project_tariff_data = all_tariff_data[all_tariff_data['Bundled_Tariff']
                                               == meter_data[meter_data['ProjectName']
                                                             == project_name]['Tariff'].iloc[0]]
+        print(project_tariff_data)
         if not project_tariff_data.empty:
             # Filter meters for this project
             project_meters = meter_data[meter_data['ProjectName'] == project_name]
@@ -402,8 +405,8 @@ def main(date):
                     if cleaned_data is not None:
                         # Determine calculation type
                         tariff_type = project_tariff_data['TYPE'].iloc[0]
-                        consumption = calculate_consumption(cleaned_data, tariff_type, exp_flag)
 
+                        consumption = calculate_consumption(cleaned_data, tariff_type, exp_flag)
                         # Generate invoice
                         invoice = generate_invoice(consumption, project_tariff_data.iloc[0].to_dict(), date, meter)
                         try:
