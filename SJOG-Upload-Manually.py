@@ -1,5 +1,4 @@
 import os
-import io
 import pandas as pd
 import pyodbc
 from dotenv import load_dotenv
@@ -11,7 +10,6 @@ import requests
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 import tabula
-from Apollo import upload_apollo
 from Gas_Formatting import gas_consumption
 
 # Load environment variables
@@ -146,14 +144,6 @@ def process_csv_file(file_path, table_dict, cursor):
         df_csv = e_formatting(csv_data)
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
         delete_file(file_path)
-    elif 'LogRecNum' in csv_header:
-        try:
-            df_csv = upload_apollo(csv_data, file_name_without_extension)
-            df_csv.to_sql('Meter_Output_Detail', engine, if_exists='append', index=False)
-            print("Insert Successful")
-            delete_file(file_path)
-        except pyodbc.Error as e:
-            print(e)
     else:
         print("The CSV file cannot be inserted into the Azure SQL DB")
 

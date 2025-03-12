@@ -181,7 +181,7 @@ def process_email_attachments(attachment_files):
                             # Upload the processed data to Azure SQL
                             # Note: Ensure that the pdf_df now aligns with the table structure of Azure SQL
                             upload_dataframe_to_azure_sql(pdf_df, table_name, connection_string)
-                            # print("Data uploaded successfully to Azure SQL.")
+                            # print("123 uploaded successfully to Azure SQL.")
                     except Exception as e:
                         print(f"Error processing PDF tables in file: {attachment.name}. Error: {e}")
                     item.is_read = True
