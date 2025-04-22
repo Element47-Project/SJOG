@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import logging
 from dotenv import load_dotenv
@@ -6,6 +5,7 @@ import os
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 import warnings
+from sqlalchemy import text
 
 process_date = ''  # "%Y-%m-%d"
 log_file_path = r"C:\Users\Shane\Desktop\Apllo\apollo_upload.log"
@@ -28,10 +28,123 @@ CONNECTION_STRING = (
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
+def fetch_meter_data():
+    try:
+        query = f"""
+            SELECT 
+                [ProjectName], 
+                [Meter], 
+                [Tariff],
+                [Status],
+                [EXP]
+            FROM [dbo].[Meter_Table]
+            WHERE [Status] IN ('Running', 'Processing')
+        """
+
+        meter_data = pd.read_sql(query, engine)
+        return meter_data
+
+    except Exception as e:
+        logging.error(f"Error fetching meter data: {e}")
+        return None
+
+
+def fetch_data(start, meter):
+    try:
+        start = pd.to_datetime(start)
+        end = start + timedelta(days=1)
+
+        meter = "(" + ",".join(f"'{m}'" for m in meter) + ")"
+
+        query = f"""
+            SELECT 
+                [DateTime], [Meter], [kWh_IMP], [kWh_EXP], [kvarh_IMP], [kvarh_EXP],
+                [kVAh], [V1], [V2], [V3], [I1], [I2], [I3], [kW1], [kW2], [kW3] 
+            FROM [dbo].[Meter_Output_RAW]
+            WHERE [DateTime] >= '{start.strftime('%Y-%m-%d %H:%M:%S')}'
+              AND [DateTime] < '{end.strftime('%Y-%m-%d %H:%M:%S')}'
+              AND [Meter] IN {meter}
+
+            UNION ALL 
+
+            SELECT                 
+                [DateTime], [Meter], [kWh_IMP], [kWh_EXP], [kvarh_IMP], [kvarh_EXP],
+                [kVAh], [V1], [V2], [V3], [I1], [I2], [I3], [kW1], [kW2], [kW3]  
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY [Meter] ORDER BY [DateTime]) AS rn
+                FROM [dbo].[Meter_Output_RAW]
+                WHERE [DateTime] >= '{end.strftime('%Y-%m-%d %H:%M:%S')}'
+                  AND [Meter] IN {meter}
+            ) t
+            WHERE rn = 1
+        """
+
+        df = pd.read_sql(query, engine)
+        return df.sort_values(by=['Meter', 'DateTime']).reset_index(drop=True)
+
+    except Exception as e:
+        logging.error(f"Error fetching all meter data with next point: {e}")
+        return None
+
+
+def clean_data(df):
+    try:
+        df['DateTime'] = pd.to_datetime(df['DateTime'])
+        required_cols = ['kWh_IMP', 'kWh_EXP']
+
+        meters = df['Meter'].dropna().unique()
+        all_results = []
+        next_day_points = df.iloc[0:0].copy()
+        start_time = pd.to_datetime(df['DateTime'].min().date())
+        next_day_start = start_time + pd.Timedelta(days=1)
+        for meter in meters:
+            meter_df = df[df['Meter'] == meter].copy()
+            end_time = meter_df['DateTime'].max()
+
+            full_time_range = pd.date_range(start=start_time, end=end_time, freq='15min')
+            meter_df = meter_df.set_index('DateTime').reindex(full_time_range)
+            meter_df['Meter'] = meter  # 补回 meter
+
+            for col in required_cols:
+                meter_df[col] = meter_df[col].ffill().bfill()
+
+            if next_day_start in meter_df.index:
+                point = meter_df.loc[[next_day_start]].copy()
+                point["DateTime"] = next_day_start
+                point["Meter"] = meter
+                next_day_points = pd.concat([next_day_points, point], ignore_index=True)
+
+            for col in required_cols:
+                meter_df[col] = meter_df[col].fillna(0).round().astype(int)
+
+            # 生成 Prev 和 Diff 列
+            meter_df['Prev_kWh_IMP'] = meter_df['kWh_IMP'].shift(1)
+            meter_df['Prev_kWh_EXP'] = meter_df['kWh_EXP'].shift(1)
+
+            meter_df['Diff_kWh_IMP'] = meter_df['kWh_IMP'] - meter_df['Prev_kWh_IMP']
+            meter_df['Diff_kWh_EXP'] = meter_df['kWh_EXP'] - meter_df['Prev_kWh_EXP']
+
+            meter_df = meter_df.reset_index().rename(columns={'index': 'DateTime'})
+            all_results.append(meter_df)
+
+        if not all_results:
+            logging.warning("⚠️ No valid meter data after filtering.")
+            return pd.DataFrame()
+
+        result_df = pd.concat(all_results, ignore_index=True)
+        result_df = result_df.sort_values(by=['Meter', 'DateTime']).reset_index(drop=True)
+        result_df = result_df[result_df["DateTime"] <= next_day_start]
+
+        logging.info(f"✅ Strict clean completed for {len(all_results)} meters.")
+        return result_df, next_day_points
+
+    except Exception as e:
+        logging.error(f"❌ Error in clean_meter_data_with_diff_and_prev_strict: {e}")
+        return df
+
+
 def get_time_ranges(tariff_type):
-    """
-    Define time ranges for different tariff types, including weekday and weekend logic.
-    """
     if tariff_type == 1:  # Anytime
         return {
             "Weekday": {
@@ -81,28 +194,7 @@ def get_time_ranges(tariff_type):
         return {}
 
 
-def fetch_meter_data():
-    try:
-        query = f"""
-            SELECT 
-                [ProjectName], 
-                [Meter], 
-                [Tariff],
-                [Status],
-                [EXP]
-            FROM [dbo].[Meter_Table]
-            WHERE [Status] IN ('Running', 'Processing')
-        """
-
-        meter_data = pd.read_sql(query, engine)
-        return meter_data
-
-    except Exception as e:
-        logging.error(f"Error fetching meter data: {e}")
-        return None
-
-
-def fetch_all_tariff_data(date):
+def fetch_all_tariff_data(projectname, date):
     """
     Fetch all tariff data for the given date in bulk.
     """
@@ -113,8 +205,9 @@ def fetch_all_tariff_data(date):
             FROM [dbo].[Tariff_All]
             WHERE StartDate <= ? 
                   AND DATEADD(year, 1, StartDate) > ?
+                  AND Bundled_Tariff = ?
         """
-        params = (date, date)
+        params = (date, date, projectname)
         tariff_data = pd.read_sql(query, engine, params=params)
 
         if tariff_data.empty:
@@ -129,313 +222,185 @@ def fetch_all_tariff_data(date):
         return None
 
 
-def fetch_meter_data_with_previous(meter, date):
+def calculate_imp_exp_consumption(df_clean, date):
     try:
-        query = f"""
-            SELECT TOP 1 [DateTime], [Meter], [kWh_IMP], [kWh_EXP]
-            FROM [dbo].[Meter_Output_Detail]
-            WHERE [Meter] = '{meter}' AND [DateTime] < '{date} 00:00:00'
-            ORDER BY [DateTime] DESC;
+        result_rows = []
 
-            SELECT [DateTime], [kWh_IMP], [kWh_EXP], [kvarh_IMP],
-                   [kvarh_EXP], [kVAh], [V1], [V2], [V3], [I1], [I2], [I3],
-                   [kW1], [kW2], [kW3], [Meter]
-            FROM [dbo].[Meter_Output_RAW]
-            WHERE [Meter] = '{meter}' AND CONVERT(date, [DateTime]) = '{date}'
-            ORDER BY [DateTime];
-        """
+        for meter in df_clean['Meter'].unique():
+            meter_df = df_clean[df_clean['Meter'] == meter].copy()
 
-        prev_data = pd.read_sql(query.split(';')[0], engine)
-        if prev_data is None or prev_data.empty:
-            prev_data = pd.DataFrame({
-                'DateTime': [pd.Timestamp('1900-01-01 00:00:00')],
-                'Meter': [meter],
-                'kWh_IMP': [0],
-                'kWh_EXP': [0]
+            total_imp = meter_df['Diff_kWh_IMP'].sum()
+            result_rows.append({
+                'Date': date,
+                'Meter': meter,
+                'EXP': 0,
+                'Consumption': total_imp,
+                'Anytime': total_imp,
+                'On_Peak': None,
+                'Shoulder': None,
+                'Off_Peak': None,
+                'Overnight': None,
+                'Super_Off_Peak': None,
+                'Demand': None
             })
-        curr_data = pd.read_sql(query.split(';')[1], engine)
-        if curr_data.empty:
-            logging.warning(f"No data for meter '{meter}' on date '{date}'.")
-            return None, prev_data, None
 
-        # Ensure the columns match expected structure
-        combined_data = pd.concat(
-            [df for df in [prev_data, curr_data] if not df.empty],
-            ignore_index=True
-        ).sort_values(by='DateTime').reset_index(drop=True)
+            total_exp = meter_df['Diff_kWh_EXP'].sum()
+            if total_exp > 0:
+                result_rows.append({
+                    'Date': date,
+                    'Meter': meter,
+                    'EXP': 1,
+                    'Consumption': total_exp,
+                    'Anytime': total_exp,
+                    'On_Peak': None,
+                    'Shoulder': None,
+                    'Off_Peak': None,
+                    'Overnight': None,
+                    'Super_Off_Peak': None,
+                    'Demand': None
+                })
 
-        required_columns = [
-            'DateTime', 'kWh_IMP', 'kWh_EXP', 'kvarh_IMP',
-            'kvarh_EXP', 'kVAh', 'V1', 'V2', 'V3', 'I1', 'I2', 'I3',
-            'kW1', 'kW2', 'kW3', 'Meter'
-        ]
-
-        for column in required_columns:
-            if column not in combined_data.columns:
-                combined_data[column] = 0
-        return combined_data, prev_data, curr_data
+        return pd.DataFrame(result_rows)
 
     except Exception as e:
-        logging.error(f"Error fetching data for meter '{meter}': {e}")
-        return None, None, None
+        logging.error(f"❌ Error in calculate_imp_exp_consumption: {e}")
+        return pd.DataFrame()
 
 
-def detect_outliers_by_difference(df, columns, group_col, threshold=200):
-    df_copy = df.copy()
+def apply_tariff_rates(df_consumption, tariff_row):
+    rate_columns = {
+        'Anytime': 'Anytime_Rate',
+        'On_Peak': 'On_Peak_Rate',
+        'Shoulder': 'Shoulder_Rate',
+        'Off_Peak': 'Off_Peak_Rate',
+        'Overnight': 'Overnight_Rate',
+        'Super_Off_Peak': 'Super_Off_Peak_Rate'
+    }
+    # 直接乘费率，覆盖原值
+    for usage_col, rate_col in rate_columns.items():
+        rate = tariff_row.get(rate_col)
+        if rate is not None and usage_col in df_consumption.columns:
+            df_consumption[usage_col] = df_consumption[usage_col] * rate
 
-    for col in columns:
-        df_copy = df_copy.sort_values([group_col, 'DateTime'])
-        df_copy[f'{col}_diff'] = df_copy.groupby(group_col)[col].diff()
-        outliers = (df_copy[f'{col}_diff'].abs() > threshold) | (df_copy[f'{col}_diff'].abs().shift(-1) > threshold)
-        df_copy.loc[outliers, col] = np.nan
-        df_copy = df_copy.drop(f'{col}_diff', axis=1)
+    # 固定费用列
+    fixed_price = tariff_row.get("Fixed_Price", 0)
+    df_consumption["Fixed_Daily"] = fixed_price
 
-    return df_copy
+    # 所有费用字段 + fixed price，求和再乘以1.1
+    price_cols = list(rate_columns.keys()) + ["Fixed_Daily"]
+    df_consumption["Total"] = df_consumption[price_cols].fillna(0).sum(axis=1) * 1.1
+
+    return df_consumption
 
 
-def clean_meter_data(df, pre_data):
+def upload_to_sql(df, table_name):
     try:
-        process_cols = ['kWh_IMP', 'kWh_EXP']
-        df[process_cols] = df[process_cols].replace(0, np.nan)
-        df[process_cols] = df[process_cols].fillna(method='ffill').fillna(0).round().astype(int)
-        df = detect_outliers_by_difference(df, process_cols, group_col='Meter', threshold=200)
-        df[process_cols] = df.groupby('Meter')[process_cols].ffill().bfill()
-
-        for meter in df['Meter'].unique():
-            prev_row = pre_data[pre_data['Meter'] == meter]
-            if not prev_row.empty:
-                mask = (df['Meter'] == meter) & (df['DateTime'] == df[df['Meter'] == meter]['DateTime'].min())
-                for col in ['kWh_IMP', 'kWh_EXP']:
-                    df.loc[mask, f'Prev_{col}'] = prev_row[col].values[0]
-
-        if 'Prev_kWh_IMP' not in df.columns:
-            df['Prev_kWh_IMP'] = np.nan
-        if 'Prev_kWh_EXP' not in df.columns:
-            df['Prev_kWh_EXP'] = np.nan
-
-        df['Prev_kWh_IMP'] = df.groupby('Meter')['kWh_IMP'].shift(1).fillna(df['Prev_kWh_IMP'])
-        df['Prev_kWh_EXP'] = df.groupby('Meter')['kWh_EXP'].shift(1).fillna(df['Prev_kWh_EXP'])
-
-        for col in process_cols:
-            df[f'Diff_{col}'] = df[col] - df[f'Prev_{col}']
-            df[f'Diff_{col}'] = df[f'Diff_{col}'].fillna(0)
-
-        return df
-
+        df.to_sql(table_name, con=engine, if_exists='append', index=False)
+        print(f"✅ Uploaded to SQL table: {table_name}")
     except Exception as e:
-        logging.error(f"Error during data cleaning: {e}")
-        return None
+        logging.error(f"❌ Error uploading to {table_name}: {e}")
+        print(f"❌ Error uploading to {table_name}: {e}")
 
 
-def calculate_consumption(cleaned_data, tariff_type, exp):
-    """
-    Calculate consumption for all time ranges based on tariff type.
-    Output all kinds of time range data, leave null if no data.
-    """
+def delete_and_insert_next_day_points(df_next, table_name="Meter_Output_RAW"):
     try:
-        if cleaned_data is None or cleaned_data.empty:
-            return {
-                "Anytime": None, "Peak": None, "Shoulder": None, "Off-Peak": None,
-                "Overnight": None, "Super_Off_Peak": None, "EXP": None
-            }
+        if df_next.empty:
+            print("⚠️ df_next 为空，无需处理")
+            return
 
-        # Get time ranges for the tariff type
-        time_ranges = get_time_ranges(tariff_type)
+        with engine.begin() as conn:
+            unique_date = df_next["DateTime"].iloc[0]
+            if isinstance(unique_date, pd.Timestamp):
+                unique_date = unique_date.to_pydatetime()
 
-        # Initialize consumption categories
-        consumption_imp = {
-            "Anytime": 0,
-            "Peak": 0,
-            "Shoulder": 0,
-            "Off-Peak": 0,
-            "Overnight": 0,
-            "Super_Off_Peak": 0,
-            "EXP": 0
-        }
+            meters_to_delete = df_next["Meter"].unique().tolist()
 
-        consumption_exp = {
-            "Anytime": 0,
-            "Peak": 0,
-            "Shoulder": 0,
-            "Off-Peak": 0,
-            "Overnight": 0,
-            "Super_Off_Peak": 0,
-            "EXP": 1
-        }
+            params = {"date": unique_date}
+            placeholders = []
 
-        # Add Weekday and Time columns for filtering
-        cleaned_data['Weekday'] = cleaned_data['DateTime'].dt.weekday
-        cleaned_data['Time'] = cleaned_data['DateTime'].dt.time
+            for i, meter in enumerate(meters_to_delete):
+                param_name = f"meter_{i}"
+                params[param_name] = meter
+                placeholders.append(f":{param_name}")
 
-        # Separate weekday and weekend data
-        weekday_data = cleaned_data[cleaned_data['Weekday'] < 5]
-        weekend_data = cleaned_data[cleaned_data['Weekday'] >= 5]
+            delete_sql = text(f"""
+                DELETE FROM {table_name} 
+                WHERE DateTime = :date 
+                AND Meter IN ({", ".join(placeholders)})
+            """)
 
-        # Calculate weekday consumption
-        if "Weekday" in time_ranges:
-            for period, time_range in time_ranges["Weekday"].items():
-                for start_time, end_time in time_range:
-                    if start_time == pd.to_datetime("00:00:00").time():
-                        filtered_period = weekday_data[(weekday_data['Time'] >= start_time)
-                                                       & (weekday_data['Time'] <= end_time)]
-                    else:
-                        filtered_period = weekday_data[(weekday_data['Time'] > start_time)
-                                                       & (weekday_data['Time'] <= end_time)]
-                    consumption_imp[period] += filtered_period['Diff_kWh_IMP'].sum()
-                    if exp == 1 and pd.notnull(filtered_period['Diff_kWh_EXP'].sum()):
-                        consumption_exp[period] += filtered_period['Diff_kWh_EXP'].sum()
+            conn.execute(delete_sql, params)
 
-        # Calculate weekend consumption
-        if "Weekend" in time_ranges:
-            for period, time_range in time_ranges["Weekend"].items():
-                for start_time, end_time in time_range:
-                    if start_time == pd.to_datetime("00:00:00").time():
-                        filtered_period = weekend_data[(weekend_data['Time'] >= start_time)
-                                                       & (weekend_data['Time'] <= end_time)]
-                    else:
-                        filtered_period = weekend_data[(weekend_data['Time'] > start_time)
-                                                       & (weekend_data['Time'] <= end_time)]
-                    consumption_imp[period] += filtered_period['Diff_kWh_IMP'].sum()
-                    if exp == 1 and pd.notnull(filtered_period['Diff_kWh_EXP'].sum()):
-                        consumption_exp[period] += filtered_period['Diff_kWh_EXP'].sum()
+            df_next.to_sql(
+                table_name,
+                con=conn,
+                if_exists="append",
+                index=False,
+                chunksize=1000
+            )
 
-        # Round consumption values and set nulls if no data
-        consumption_imp = {key: (round(value, 3) if value >= 0 else None) for key, value in consumption_imp.items()}
-        consumption_exp = {key: (round(value, 3) if value >= 0 else None) for key, value in consumption_exp.items()}
-
-        if exp == 0:
-            return consumption_imp
-        else:
-            return [consumption_imp, consumption_exp]
+            print(f"✅ upload {len(df_next)} records | Datetime: {unique_date}")
 
     except Exception as e:
-        logging.error(f"Error calculating consumption: {e}")
-        return [
-            {
-                "Anytime": None, "Peak": None, "Shoulder": None, "Off-Peak": None,
-                "Overnight": None, "Super_Off_Peak": None, "EXP": 0
-            },
-            {
-                "Anytime": None, "Peak": None, "Shoulder": None, "Off-Peak": None,
-                "Overnight": None, "Super_Off_Peak": None, "EXP": 1
-            }
-        ]
+        logging.exception("❌ Failed:")
+        raise
 
 
-def generate_invoice(consumption, tariff, date, meter):
-    """
-    Generate invoice data for a specific meter.
-    """
+def main(project_name, date):
     try:
-        invoice_rows = []
+        print(f"\n🚀 Running pipeline for {project_name} on {date}")
 
-        for cons in (consumption if isinstance(consumption, list) else [consumption]):
-            invoice_row = {
-                "Date": date,
-                "Meter": meter,
-                "EXP": cons.get("EXP"),
-                "Consumption": sum([value for key, value in cons.items() if key != "EXP" and value is not None]),
-                "Fixed_Daily": tariff.get("Fixed_Price", 0),
-                "Anytime": (cons.get("Anytime") or 0) * tariff.get("Anytime_Rate", 0),
-                "On_Peak": (cons.get("Peak") or 0) * tariff.get("On_Peak_Rate", 0),
-                "Off_Peak": (cons.get("Off-Peak") or 0) * tariff.get("Off_Peak_Rate", 0),
-                "Shoulder": (cons.get("Shoulder") or 0) * tariff.get("Shoulder_Rate", 0),
-                "Overnight": (cons.get("Overnight") or 0) * tariff.get("Overnight_Rate", 0),
-                "Super_Off_Peak": (cons.get("Super_Off_Peak") or 0) * tariff.get("Super_Off_Peak_Rate", 0),
-                "Total": sum([
-                    tariff.get("Fixed_Price", 0),
-                    (cons.get("Anytime") or 0) * tariff.get("Anytime_Rate", 0),
-                    (cons.get("Peak") or 0) * tariff.get("On_Peak_Rate", 0),
-                    (cons.get("Off-Peak") or 0) * tariff.get("Off_Peak_Rate", 0),
-                    (cons.get("Shoulder") or 0) * tariff.get("Shoulder_Rate", 0),
-                    (cons.get("Overnight") or 0) * tariff.get("Overnight_Rate", 0),
-                    (cons.get("Super_Off_Peak") or 0) * tariff.get("Super_Off_Peak_Rate", 0)
-                ]) * 1.1
-            }
-            invoice_rows.append(invoice_row)
+        meter_data = fetch_meter_data()
+        meter_data = meter_data[meter_data["ProjectName"] == project_name]
+        if meter_data.empty:
+            print(f"⚠️ No meters found for project {project_name}")
+            return
 
-        return pd.DataFrame(invoice_rows)
+        meter_list = meter_data['Meter'].tolist()
+
+        df_raw = fetch_data(date, meter_list)
+        if df_raw.empty:
+            print("⚠️ No raw meter data found.")
+            return
+
+        df_clean, next_day_points = clean_data(df_raw)
+
+        tariff = fetch_all_tariff_data(project_name, date)
+        if tariff.empty:
+            print("⚠️ No tariff found.")
+            return
+
+        tariff_row = tariff.iloc[0]
+
+        df_consumption = calculate_imp_exp_consumption(df_clean, date)
+        df_with_costs = apply_tariff_rates(df_consumption, tariff_row)
+
+        df_clean_trimmed = (
+            df_clean.sort_values(["Meter", "DateTime"])
+            .groupby("Meter", group_keys=False)
+            .apply(lambda x: x.iloc[1:])
+            .reset_index(drop=True)
+        )
+        delete_and_insert_next_day_points(next_day_points)
+        upload_to_sql(df_clean_trimmed, "Meter_Output_Detail")
+        upload_to_sql(df_with_costs, "Invoice_All")
 
     except Exception as e:
-        logging.error(f"Error generating invoice: {e}")
-        return None
+        logging.error(f"❌ Fatal error in main(): {e}")
+        print(f"❌ Fatal error: {e}")
 
 
-def main(date):
-    if not date:
-        date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+if __name__ == "__main__":
+    project_name = "Apollo"
 
-    logging.info(f"Processing data for date: {date}")
+    if process_date is None:
+        start_date = datetime.now().date() - timedelta(days=1)  # 默认只跑昨天
+    else:
+        start_date = pd.to_datetime(process_date).date()
 
-    CLEANED_DATA_COLUMNS = [
-        'DateTime', 'kWh_IMP', 'Prev_kWh_IMP', 'Diff_kWh_IMP',
-        'kWh_EXP', 'Prev_kWh_EXP', 'Diff_kWh_EXP', 'kvarh_IMP',
-        'kvarh_EXP', 'kVAh', 'V1', 'V2', 'V3', 'I1', 'I2', 'I3',
-        'kW1', 'kW2', 'kW3', 'Meter'
-    ]
+    end_date = datetime.now().date() - timedelta(days=1)  # 只跑到昨天
 
-    INVOICE_COLUMNS = [
-        'Date', 'Meter', 'EXP', 'Consumption', 'Fixed_Daily',
-        'Anytime', 'On_Peak', 'Off_Peak', 'Shoulder', 'Overnight',
-        'Super_Off_Peak', 'Total'
-    ]
-    # Fetch meter data
-    meter_data = fetch_meter_data()
-
-    # Fetch tariff data
-    all_tariff_data = fetch_all_tariff_data(date)
-    all_tariff_data.fillna(0, inplace=True)
-
-    # Find unique projects
-    unique_projects = meter_data['ProjectName'].unique()
-
-    for project_name in unique_projects:
-        # Get tariff data for the project
-        project_tariff_data = all_tariff_data[all_tariff_data['Bundled_Tariff']
-                                              == meter_data[meter_data['ProjectName']
-                                                            == project_name]['Tariff'].iloc[0]]
-        if not project_tariff_data.empty:
-            # Filter meters for this project
-            project_meters = meter_data[meter_data['ProjectName'] == project_name]
-
-            for _, meter_row in project_meters.iterrows():
-                meter = meter_row['Meter']
-                status = meter_row['Status']
-                exp_flag = meter_row['EXP']
-                print(f"Processing Meter '{meter}' in Project '{project_name}' with status '{status}' "
-                      f"and EXP flag '{exp_flag}'.")
-
-                # Fetch data for the specific meter
-                meter_data_details, prev_data, curr_data = fetch_meter_data_with_previous(meter, date)
-                if meter_data_details is not None:
-                    cleaned_data = clean_meter_data(meter_data_details, prev_data)
-
-                    if cleaned_data is not None:
-                        # Determine calculation type
-                        tariff_type = project_tariff_data['TYPE'].iloc[0]
-                        consumption = calculate_consumption(cleaned_data, tariff_type, exp_flag)
-
-                        # Generate invoice
-                        invoice = generate_invoice(consumption, project_tariff_data.iloc[0].to_dict(), date, meter)
-                        try:
-                            cleaned_data[CLEANED_DATA_COLUMNS].iloc[1:].to_sql(
-                                'Meter_Output_Detail', con=engine, if_exists='append', index=False)
-
-                            invoice[INVOICE_COLUMNS].to_sql('Invoice_All', con=engine, if_exists='append', index=False)
-                        except Exception as e:
-                            logging.error(f"Error uploading data for Meter '{meter}': {e}")
-        else:
-            logging.warning(f"No tariff data found for Project '{project_name}'.")
-
-
-# if __name__ == "__main__":
-#     start_date = datetime.strptime(process_date, "%Y-%m-%d")
-#     end_date = datetime.today() - timedelta(days=1)  # Yesterday's date
-#
-#     current_date = start_date
-#     while current_date <= end_date:
-#         main(current_date.strftime("%Y-%m-%d"))
-#         current_date += timedelta(days=1)
-
-if __name__ == '__main__':
-    main(process_date)
+    current_date = start_date
+    while current_date <= end_date:
+        main(project_name, current_date.strftime("%Y-%m-%d"))
+        current_date += timedelta(days=1)

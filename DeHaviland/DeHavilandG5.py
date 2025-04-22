@@ -120,10 +120,10 @@ class DataProcessor:
         # 按 Meter 分组
         result = []
         for meter, group in raw_data.groupby('Meter'):
-            # 生成目标时间范围（15分钟间隔）
+            # 生成目标时间范围（20分钟间隔）
             start_time = group['DateTime'].min().floor('H')
             end_time = group['DateTime'].max().ceil('H')
-            target_times = pd.date_range(start=start_time, end=end_time, freq='15T')
+            target_times = pd.date_range(start=start_time, end=end_time, freq='20T')
 
             # 以 DateTime 为索引
             group = group.set_index('DateTime')
@@ -158,8 +158,8 @@ class DataProcessor:
         # Prepare formatted data
         format_data = pd.DataFrame()
         format_data['timeStamp'] = final_data['DateTime']
-        format_data['import'] = final_data['kWh_IMP'] * 1000
-        format_data['export'] = final_data['kWh_EXP'] * 1000
+        format_data['import'] = final_data['kWh_IMP']
+        format_data['export'] = final_data['kWh_EXP']
         format_data['meterUid'] = final_data['display_name'].map(self.mapping)
         format_data['energyUnit'] = 'Wh'
         format_data['display_name'] = final_data['display_name']
@@ -170,15 +170,15 @@ class DataProcessor:
 
 def generate_full_time_range(group):
     """
-    Generate a complete range of timestamps at 15-minute intervals,
-    starting from start_time + 15 minutes and ending at end_time.
+    Generate a complete range of timestamps at 20-minute intervals,
+    starting from start_time + 20 minutes and ending at end_time.
     """
     # Adjust the start and end times for the group
-    adjusted_start = pd.Timestamp(start_time) + pd.Timedelta(minutes=15)
+    adjusted_start = pd.Timestamp(start_time) + pd.Timedelta(minutes=20)
     adjusted_end = pd.Timestamp(end_time)
 
-    # Generate a range of timestamps at 15-minute intervals
-    full_range = pd.date_range(start=adjusted_start, end=adjusted_end, freq='15T')
+    # Generate a range of timestamps at 20-minute intervals
+    full_range = pd.date_range(start=adjusted_start, end=adjusted_end, freq='20T')
     full_df = pd.DataFrame({'timeStamp': full_range})
 
     # Assign the meterUid for the group
@@ -188,7 +188,7 @@ def generate_full_time_range(group):
 
 def fill_missing_intervals(group):
     """
-    Add missing rows for 15-minute intervals and merge with the original group.
+    Add missing rows for 20-minute intervals and merge with the original group.
     """
     full_df = generate_full_time_range(group)
     merged = pd.merge(full_df, group, on=['timeStamp', 'meterUid'], how='left')
@@ -208,7 +208,7 @@ def fill_missing_intervals(group):
 
     # Recalculate intervals
     merged['interval'] = merged['timeStamp'].diff().dt.total_seconds() / 60
-    merged['interval'] = merged['interval'].fillna(15)  # Fill the first interval with 15
+    merged['interval'] = merged['interval'].fillna(20)  # Fill the first interval with 20
     return merged
 
 
@@ -313,7 +313,7 @@ if __name__ == "__main__":
         # 认证并上传数据
         uploader.authenticate()
         uploader.process_and_upload()
-        os.remove(processed_file)
+        # os.remove(processed_file)
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     send_email_with_attachment(log_file, "zhengliangqiu50@gmail.com",

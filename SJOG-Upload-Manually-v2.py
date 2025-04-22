@@ -2,8 +2,6 @@ import os
 import pandas as pd
 import pyodbc
 from dotenv import load_dotenv
-import openpyxl
-import xlrd
 from Gas_csv_Formatting import consumption
 from Elec_csv_Formatting import e_formatting
 import requests
@@ -11,6 +9,8 @@ from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 import tabula
 from Gas_Formatting import gas_consumption
+from PDF import gas_billing
+from Waste import waste
 
 # Load environment variables
 load_dotenv()
@@ -88,52 +88,34 @@ def fetch_latest_date_from_azure(cursor, table_dict, table_name='Temperature_hou
 
 def process_xlsx_file(file_path, table_dict, cursor, site):
     try:
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
-
-        for sheet_name in workbook.sheetnames:
-            sheet = workbook[sheet_name]
-            skip_rows = 0
-            for row in sheet.iter_rows(min_row=1, max_col=1):
-                cell = row[0]
-                if cell.value is not None:
-                    skip_rows = cell.row - 1
-                    break
-
-            batch_df = pd.read_excel(file_path, sheet_name=sheet_name, skiprows=skip_rows)
-            batch_df['Site_Address'] = site
-
-            # Find the matching table name based on the column names
-            for table_name, azure_columns in get_all_table_columns(cursor).items():
-                if all(col in batch_df.columns for col in azure_columns):
-                    upload_dataframe_to_azure_sql(batch_df, table_name, cursor, table_dict)
-                    delete_file(file_path)
-                    break
-            else:
-                print(f"No matching table found for sheet: {sheet_name}")
-
-    except xlrd.biffh.XLRDError as e:
-        if str(e) == "Workbook is encrypted":
-            print(f"Cannot process encrypted file: {file_path}")
-        else:
-            raise
+        df = waste(file_path)
+        df["Site"] = site
+        upload_dataframe_to_azure_sql(df, "TestingWWaste", cursor, table_dict)
+        delete_file(file_path)
+    except Exception as e:
+        print(f"❌ Failed to process file: {file_path}")
+        print(e)
 
 
 def process_csv_file(file_path, table_dict, cursor, site):
     file_name_without_extension = os.path.basename(file_path).rsplit('.', 1)[0]
     csv_header = pd.read_csv(file_path, nrows=0).columns.tolist()
     csv_data = pd.read_csv(file_path)
-    csv_data['Site_Address'] = site
-    if file_name_without_extension in table_dict:
-        upload_dataframe_to_azure_sql(csv_data, file_name_without_extension, cursor, table_dict)
+    if 'Nett_Export_MHSP' in csv_header:
+        import re
+        meter = re.sub(r'^NMI_', '', file_name_without_extension)
+        csv_data['NMI'] = meter
+        csv_data['Site'] = site
+        upload_dataframe_to_azure_sql(csv_data, 'SJOG_Elec', cursor, table_dict)
         delete_file(file_path)
     elif 'Carbon Neutral Charge' in csv_header:
-        df_csv = gas_consumption(csv_data)
-        df_csv['Site_Address'] = site
+        df_csv = gas_consumption(csv_data, site)
+        df_csv['Site'] = site
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
         delete_file(file_path)
     elif 'CONSUMPTION_HR01' in csv_header:
         df_csv = consumption(csv_data)
-        df_csv['Site_Address'] = site
+        df_csv['Site'] = site
         upload_dataframe_to_azure_sql(df_csv, 'TestingGas', cursor, table_dict)
         delete_file(file_path)
     elif 'Zero_Flag' in csv_header:
@@ -146,7 +128,7 @@ def process_csv_file(file_path, table_dict, cursor, site):
         delete_file(file_path)
     elif 'Unit Of Measure' in csv_header:
         df_csv = e_formatting(csv_data)
-        df_csv['Site_Address'] = site
+        df_csv['Site'] = site
         upload_dataframe_to_azure_sql(df_csv, 'TestingElecBilling', cursor, table_dict)
         delete_file(file_path)
     else:
@@ -155,6 +137,15 @@ def process_csv_file(file_path, table_dict, cursor, site):
 
 def process_pdf_file(file_path, table_dict, cursor, site):
     try:
+        # 尝试处理成账单结构表（你写的那一套提取）
+        df = gas_billing(file_path)
+
+        if not df.empty:
+            df["Site"] = site
+            upload_dataframe_to_azure_sql(df, "TestingGasBill", cursor, table_dict)
+            delete_file(file_path)
+            return
+
         tables = tabula.read_pdf(file_path, pages='all', multiple_tables=True)
         correct_headers = ['Water Use Year', 'Read Date', 'Reading', 'Dial Reading', 'Kilolitres Used',
                            'Consumption Year to Date', 'Daily Rate']
@@ -163,7 +154,7 @@ def process_pdf_file(file_path, table_dict, cursor, site):
                 table.columns = correct_headers
                 processed_table = table.iloc[2:].reset_index(drop=True)
                 processed_table['Read Date'] = pd.to_datetime(processed_table['Read Date'], format='%d/%m/%Y')
-                processed_table['Site_Address'] = site
+                processed_table['Site'] = site
                 upload_dataframe_to_azure_sql(processed_table, 'TestingWater', cursor, table_dict)
                 delete_file(file_path)
 
