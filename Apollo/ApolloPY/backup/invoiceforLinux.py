@@ -1,7 +1,6 @@
 import os
 import logging
 import pandas as pd
-import openpyxl
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
@@ -12,15 +11,18 @@ from email.mime.base import MIMEBase
 from email import encoders
 
 # Initialize logging
-log_file_path = os.path.join(os.path.expanduser("~"), "apollo_upload.log")
+log_file_path = os.path.join(os.path.dirname(__file__), "logs", "apollo_invoice.log")
 logging.basicConfig(filename=log_file_path, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables
 load_dotenv()
-SQL_SERVER = 'sqlddatabasedemo.database.windows.net'
-SQL_DB_NAME = 'SampleDB'
-SQL_USERNAME = 'sqladmin'
-SQL_PASSWORD = 'Reviveyourbody47'
+SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
+SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
+SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
+SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
+EMAIL_USERNAME = os.environ.get('EMAIL_USERNAME')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
+
 
 # Configure SQL database connection
 def get_engine():
@@ -249,7 +251,7 @@ def main():
 
     # Send email and delete file
     send_email_with_attachment(output_file, "zhengliangqiu50@gmail.com",
-                               'zhengliangqiu50@gmail.com', 'ddwibcgdyfsqakbj')
+                               EMAIL_USERNAME, EMAIL_PASSWORD)
 
 
 if __name__ == "__main__":

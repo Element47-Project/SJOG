@@ -1,0 +1,22 @@
+import requests
+
+# 你的 Access Token
+access_token = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjFDQUY4RTY2NzcyRDZEQzAyOEQ2NzI2RkQwMjYxNTgxNTcwRUZDMTkiLCJ0eXAiOiJKV1QiLCJ4NXQiOiJISy1PWm5jdGJjQW8xbkp2MENZVmdWY09fQmsifQ.eyJuYmYiOjE3NDIzODAxMzMsImV4cCI6MTc0MjM4MTkzMywiaXNzIjoiaHR0cHM6Ly9pZGVudGl0eS54ZXJvLmNvbSIsImF1ZCI6Imh0dHBzOi8vaWRlbnRpdHkueGVyby5jb20vcmVzb3VyY2VzIiwiY2xpZW50X2lkIjoiNTc4OERDNTE5RDY3NDJFQ0I5OTIwRkFCNEQ1MjExRTciLCJzdWIiOiIwMGFkMzYzNDE1OTg1NTQ0ODdlODJhNzJiY2Y2ZDQwNiIsImF1dGhfdGltZSI6MTc0MjM3OTY5NiwieGVyb191c2VyaWQiOiI5NjM5Y2ZiOS1iNGFmLTQ2ZGEtOTA5My1hNmZlNjk0ZmYxNmUiLCJnbG9iYWxfc2Vzc2lvbl9pZCI6IjM3MjczOGU3ZWQ5ODQ2YTViOWEzZjE1M2Y3YzBlNDI4Iiwic2lkIjoiMzcyNzM4ZTdlZDk4NDZhNWI5YTNmMTUzZjdjMGU0MjgiLCJqdGkiOiIwNUM5NTdEN0NBMEYwRjQ2MTg1NzA0Njg1NEI2QzA2MyIsImF1dGhlbnRpY2F0aW9uX2V2ZW50X2lkIjoiMjJiOGM1MzEtNDM5Ni00Y2Q2LWFjM2EtZGVmMGNjYWUyZWQxIiwic2NvcGUiOlsiZW1haWwiLCJwcm9maWxlIiwib3BlbmlkIiwicGF5cm9sbC5lbXBsb3llZXMiLCJwYXlyb2xsLmVtcGxveWVlcy5yZWFkIiwicGF5cm9sbC50aW1lc2hlZXRzIiwicGF5cm9sbC50aW1lc2hlZXRzLnJlYWQiLCJvZmZsaW5lX2FjY2VzcyJdLCJhbXIiOlsicHdkIiwibWZhIiwia2JhIl19.D052BUY-LVaOyJu_zm3K5OGfNx2kMw9JMIbTacrK_97-yniFs92qCpjoiFaHzj_6m-6YOO0qNg_6iO6ofhqYwNQgt6HUu5t63zC0Gh9KNnIsbJzD_l2SuUciuwWvPu5inqeX4A7Uev3j08nRsk6WTzRLKuA-ozAFg3o6-wsDMozR3f3oN43KmehjDPUQvSzx7n_NGR1NYeaeWDnpUFNjuHg9hTLy72lyYFGGvqcBX6OQLSOLjFpKPqxt-TGWI-8vkByfqa9o8RUrN1waVZ4X1PnKhIKlz-tsDhGaiNcD_VQ9HiIXBrw6aBL-7Ms_i8p82BPkIYsI0AnPHz0dYylLzw"
+
+# 获取 Tenant ID
+tenant_url = "https://api.xero.com/connections"
+headers_tenant = {
+    "Authorization": f"Bearer {access_token}",
+    "Content-Type": "application/json"
+}
+response_tenant = requests.get(tenant_url, headers=headers_tenant)
+
+if response_tenant.status_code == 200:
+    tenant_id = response_tenant.json()[0]["tenantId"]  # 获取第一个组织的 ID
+    print(f"✅ Xero Tenant ID: {tenant_id}")
+else:
+    print("❌ 无法获取 Tenant ID:", response_tenant.json())
+
+
+
+

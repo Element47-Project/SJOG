@@ -1,4 +1,3 @@
-import subprocess
 import threading
 import EM133XM_HMI_Library as HMI_133Library
 import BFM136_HMI_Library as HMI_136Library
@@ -7,29 +6,24 @@ from config import map_133_subsets, map_136
 import signal
 from dateutil import parser
 import pandas as pd
-from dotenv import load_dotenv
 import os
-from sqlalchemy import create_engine
-load_dotenv()
+import logging
 
-SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
-SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
-SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
-SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
-
-
-engine = create_engine(f'mssql+pyodbc://{SQL_USERNAME}:{SQL_PASSWORD}@{SQL_SERVER}/{SQL_DB_NAME}'
-                       f'?driver=ODBC+Driver+18+for+SQL+Server')
-CONNECTION_STRING = (
-    f'DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SQL_SERVER};'
-    f'DATABASE={SQL_DB_NAME};UID={SQL_USERNAME};PWD={SQL_PASSWORD}'
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("app_meter.log"),
+        logging.StreamHandler()
+    ]
 )
+logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 
 
 def signal_handler(sig, frame):
-    print("\n\u26d4 User requested stop. Saving data before exiting...")
+    logger.info("\n\u26d4 User requested stop. Saving data before exiting...")
 
 
 def run_all_meters():
@@ -52,7 +46,7 @@ def process_subset(subset):
         last_timestamp = get_last_timestamp(file_path)
 
         if last_timestamp and (datetime.now() - last_timestamp) < timedelta(minutes=100):
-            print(f"✅ Skipping {key}.")
+            logger.info(f"Skipping {key}.")
             continue
         else:
             if last_timestamp:
@@ -65,18 +59,18 @@ def process_subset(subset):
 
 def run_with_retries(file_path, meter, ip, port, node, data_logger_no, last_timestamp, file_name):
     for attempt in range(MAX_RETRIES):
-        print(f"🔄 Attempt {attempt + 1} for Meter={meter}, IP={ip}, Node={node}, Port={port}, Logger={data_logger_no}")
+        logger.info(f"Attempt {attempt + 1} for Meter={meter}, IP={ip}, Node={node}, Port={port}, Logger={data_logger_no}")
         success = run(file_path, meter, ip, port, node, data_logger_no, last_timestamp, file_name)
         if success:
             return
-        print(f"⚠️ Retrying {file_path} (Attempt {attempt + 1}/{MAX_RETRIES})")
+        logger.info(f"Retrying {file_path} (Attempt {attempt + 1}/{MAX_RETRIES})")
 
-    print(f"❌ Failed after {MAX_RETRIES} attempts: {file_path}")
+    logger.info(f"Failed after {MAX_RETRIES} attempts: {file_path}")
 
 
 def run(file_path, meter, ip, port, node, data_logger_no, last_timestamp, file_name):
     TwoDArray = []
-    print(f"🔄File={file_path}, Start={last_timestamp if last_timestamp else 'Full Range'}")
+    logger.info(f"File={file_path}, Start={last_timestamp if last_timestamp else 'Full Range'}")
     if meter == 'BFM136':
         # DataLoggerInstance = HMI_136Library.DataLogger(ip, node, port, start_time=last_timestamp)
         # DataLoggerInstance.ReadDatalogger(data_logger_no, node)
@@ -88,7 +82,7 @@ def run(file_path, meter, ip, port, node, data_logger_no, last_timestamp, file_n
         TwoDArray = DataLoggerInstance.GetDataMatrix()
 
     if not TwoDArray:
-        print(f"⚠️ No new data for {file_path}.")
+        logger.info(f"No new data for {file_path}.")
         return False
     TwoDArray = pd.DataFrame(TwoDArray, columns=[
         "Index", "DateTime", "kWh_IMP", "kWh_EXP", "kvarh_IMP", "kvarh_EXP", "kVAh", "kVAh_EXPORT"
@@ -109,18 +103,18 @@ def get_last_timestamp(file_path):
         try:
             last_timestamp = parser.parse(last_timestamp_str, dayfirst=True)
         except ValueError:
-            print(f"Error parsing date: {last_timestamp_str}")
+            logger.info(f"Error parsing date: {last_timestamp_str}")
             return None
         return last_timestamp
     except Exception as e:
-        print(f"Error reading {file_path}: {e}")
+        logger.info(f"Error reading {file_path}: {e}")
         return None
 
 
 def generate_csv(data, file_path):
     file_exists = os.path.isfile(file_path)
     data.to_csv(file_path, mode='a', index=False, header=not file_exists, encoding="utf-8")
-    print(f"✅ Ready Finished {file_path}")
+    logger.info(f"Ready Finished {file_path}")
     return file_path
 
 
@@ -132,13 +126,6 @@ def format_data(data):
     data = data[1:]
 
     return data
-
-
-def upload(data):
-    table_name = 'Meter_Output_RAW'
-    data['DateTime'] = pd.to_datetime(data['DateTime'], format='%d/%m/%Y %H:%M:%S ', errors='coerce')
-    data = data[data['DateTime'].dt.minute.isin([0, 20, 40])]
-    data.to_sql(table_name, engine, if_exists='append', index=False)
 
 
 if __name__ == "__main__":

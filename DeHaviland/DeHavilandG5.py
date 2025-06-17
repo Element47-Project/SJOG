@@ -40,6 +40,8 @@ SQL_SERVER = os.environ.get('AZURE_SQL_SERVER')
 SQL_DB_NAME = os.environ.get('AZURE_SQL_DB_NAME')
 SQL_USERNAME = os.environ.get('AZURE_SQL_USERNAME')
 SQL_PASSWORD = os.environ.get('AZURE_SQL_PASSWORD')
+EMAIL_USERNAME = os.environ.get('EMAIL_USERNAME')
+EMAIL_PASSWORD = os.environ.get('EMAIL_PASSWORD')
 
 
 class AzureConnector:
@@ -317,4 +319,4 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     send_email_with_attachment(log_file, "zhengliangqiu50@gmail.com",
-                               'zhengliangqiu50@gmail.com', 'ddwibcgdyfsqakbj')
+                               EMAIL_USERNAME, EMAIL_PASSWORD)

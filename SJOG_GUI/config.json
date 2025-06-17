@@ -1,0 +1,39 @@
+{
+  "default_site": "Midland",
+  "sites": {
+    "Midland": {
+      "gas": {
+        "ACCTNO": 605628,
+        "ACCOUNT": "SJG Midland Hospital",
+        "NMI": "56009523942",
+        "ADDRESS": "1 Clayton Street, MIDLAND WA"
+      },
+      "electricity": {
+        "ACCTNO": "ALINTA ENERGY",
+        "NMI": "N/A",
+        "METER": "M1600IR003"
+      },
+      "water": {
+        "METER": "WATER-MID-001",
+        "PROVIDER": "WATER CORP"
+      },
+      "waste": {
+        "CUSTOMER_CODE": "SJG-MID-WASTE",
+        "COST_CENTRE": "CC-MID-01"
+      }
+    },
+    "123": {
+      "gas": {},
+      "electricity": {},
+      "water": {},
+      "waste": {}
+    }
+  },
+  "tables": {
+    "gas": "TestingGas",
+    "electricity": "TestingElecBilling",
+    "water": "TestingWater",
+    "waste": "TestingWWaste",
+    "temperature": "Temperature_hourly"
+  }
+}

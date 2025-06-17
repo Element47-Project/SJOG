@@ -393,7 +393,7 @@ def main(project_name, date):
 if __name__ == "__main__":
     project_name = "Apollo"
 
-    if process_date is None:
+    if not process_date:
         start_date = datetime.now().date() - timedelta(days=1)  # 默认只跑昨天
     else:
         start_date = pd.to_datetime(process_date).date()

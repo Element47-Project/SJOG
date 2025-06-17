@@ -1,0 +1,19 @@
+# 核心依赖
+pandas
+numpy
+sqlalchemy
+pyodbc
+requests
+python-dotenv
+
+# GUI
+tk
+
+# 打包为 .exe 用
+pyinstaller
+
+# 邮件发送
+secure-smtplib ; python_version < "3.10"  # 可选（大多数系统自带 smtplib）
+
+# 兼容性（如果用 requests 的高级 SSL 适配）
+urllib3
