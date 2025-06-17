@@ -134,6 +134,7 @@ def process_csv_file(file_path, table_dict, cursor, site):
 
 import fitz  # 添加这一行用于页数判断
 
+
 def process_pdf_file(file_path, table_dict, cursor, site):
     try:
         from GasBilling_PDF_Format import gas_billing
@@ -149,17 +150,16 @@ def process_pdf_file(file_path, table_dict, cursor, site):
             if not df_gas.empty:
                 df_gas["Site"] = site
                 upload_dataframe_to_azure_sql(df_gas, "TestingGasBill", cursor, table_dict)
+        else:
+            df_water = water(file_path)
+            if not df_water.empty:
+                df_water["Site"] = site
+                upload_dataframe_to_azure_sql(df_water, "TestingWater", cursor, table_dict)
 
-        # ✅ water 和 bill 默认页数是 0 和 1，没问题直接调用
-        df_water = water(file_path)
-        if not df_water.empty:
-            df_water["Site"] = site
-            upload_dataframe_to_azure_sql(df_water, "TestingWater", cursor, table_dict)
-
-        df_bill = bill(file_path)
-        if not df_bill.empty:
-            df_bill["Site"] = site
-            upload_dataframe_to_azure_sql(df_bill, "TestingBill", cursor, table_dict)
+            df_bill = bill(file_path)
+            if not df_bill.empty:
+                df_bill["Site"] = site
+                upload_dataframe_to_azure_sql(df_bill, "TestingBilling", cursor, table_dict)
 
         delete_file(file_path)
 

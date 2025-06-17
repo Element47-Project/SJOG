@@ -3,8 +3,6 @@ import pandas as pd
 import re
 import datetime
 
-file_path = '9013558645-B0109-01-638828329055457551.pdf'
-
 
 def get_text_by_position(blocks, target_top, target_left=None, tol_top=1.0, tol_left=5.0, multiline=False):
     for block in blocks:
@@ -64,8 +62,7 @@ def water(pdf_path, page_number=1):
             "Read Date": read_date_str,
             "Reading": term,
             "Dial Reading": get_text_by_position(blocks, 88.4, 53.5, multiline=True).splitlines()[4],
-            "Consumption Year to Date": usage,
-            "Consumption": consumption
+            "Consumption Year to Date": usage
         }
 
         return pd.DataFrame([info])
@@ -77,6 +74,7 @@ def bill(pdf_path, page_number=0):
         blocks = page.get_text("blocks")
         for block in blocks:
             x0, y0, x1, y1, text, *_ = block
+            print(f"top={y0:.1f}, left={x0:.1f}, text={text.strip()}")
 
         account = get_text_by_position(blocks, 110.4, 402.2, multiline=True).splitlines()[1]
         account = account.replace(" ", "")
@@ -97,10 +95,9 @@ def bill(pdf_path, page_number=0):
             "Bill Issue Date": datetime.datetime.strptime(issue_date.strip(), "%d %b %Y"),
             "Bill Due Date": datetime.datetime.strptime(due_date.strip(), "%d %b %Y"),
             "Bill ID": billID,
+            "Bill Type": "COMBINED CHARGES",
             "Bill Amount": amount
         }
 
         return pd.DataFrame([info])
 
-
-print(water(file_path).to_string())

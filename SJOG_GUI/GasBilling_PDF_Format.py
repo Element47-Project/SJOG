@@ -37,12 +37,12 @@ def gas_billing(pdf_path, page_number=3):
             "SITE ADDRESS": f"{address_match.group(1).strip()}, {address_match.group(2)}",
             "INVOICE #": get_text_by_position(blocks, 55.4, 317.0, multiline=True).splitlines()[0],
             "NMI": get_text_by_position(blocks, 55.4, 317.0, multiline=True).splitlines()[2],
-            "BILLING PERIOD START DATE": pd.to_datetime(get_text_by_position(blocks, 122.4, 321.5).splitlines()[0],
+            "BILLING PERIOD START DATE": pd.to_datetime(get_text_by_position(blocks, 122.4, 283.6).splitlines()[0],
                                                         errors="coerce"),
-            "BILLING PERIOD END DATE": pd.to_datetime(get_text_by_position(blocks, 122.4, 321.5).splitlines()[1],
+            "BILLING PERIOD END DATE": pd.to_datetime(get_text_by_position(blocks, 122.4, 283.6).splitlines()[1],
                                                       errors="coerce"),
             "BILLING PERIOD NUMBER OF DAYS": int(
-                re.sub(r"[^\d]", "", get_text_by_position(blocks, 122.4, 321.5).splitlines()[2])
+                re.sub(r"[^\d]", "", get_text_by_position(blocks, 122.4, 283.6).splitlines()[2])
             ),
             "TOTAL GAS CONSUMPTION (GJ)": float(
                 re.sub(r"[^\d.]", "", get_text_by_position(blocks, 194.8, 29.5).splitlines()[3])
@@ -55,3 +55,4 @@ def gas_billing(pdf_path, page_number=3):
         }
 
         return pd.DataFrame([info])
+
