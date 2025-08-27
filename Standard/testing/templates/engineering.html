@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engineering Screen</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script>
+        function showSingleValues() {
+            document.getElementById("singleValues").style.display = "block";
+            document.getElementById("totalValues").style.display = "none";
+        }
+
+        function showTotalValues() {
+            document.getElementById("singleValues").style.display = "none";
+            document.getElementById("totalValues").style.display = "block";
+        }
+    </script>
+</head>
+
+<body>
+    <nav>
+        <ul>
+            <li><a href="/flaskapp">Home</a></li>
+            <li><a href="/flaskapp/engineering">Engineering</a></li>
+            <li><a href="/flaskapp/history">History</a></li>
+            <li><a href="/flaskapp/settings">Settings</a></li>
+        </ul>
+    </nav>
+    <h1>Engineering Screen</h1>
+
+    <!-- Buttons to switch views -->
+    <button onclick="showSingleValues()">Single Values</button>
+    <button onclick="showTotalValues()">Total Values</button>
+
+    <!-- Single Values (Pic 1) -->
+    <div id="singleValues" style="display: block;">
+        <h2>Line 1, Line 2, Line 3</h2>
+        <table border="1">
+            <tr>
+                <th></th>
+                <th>Line 1</th>
+                <th>Line 2</th>
+                <th>Line 3</th>
+            </tr>
+            <tbody>
+                <!-- Row for Voltage (V) -->
+                <tr>
+                    <td>V</td>
+                    <td id="line1-v">Loading...</td>
+                    <td id="line2-v">Loading...</td>
+                    <td id="line3-v">Loading...</td>
+                </tr>
+
+                <!-- Row for Current (I) -->
+                <tr>
+                    <td>I</td>
+                    <td id="line1-i">Loading...</td>
+                    <td id="line2-i">Loading...</td>
+                    <td id="line3-i">Loading...</td>
+                </tr>
+
+                <!-- Row for Active Power (KW) -->
+                <tr>
+                    <td>KW</td>
+                    <td id="line1-kw">Loading...</td>
+                    <td id="line2-kw">Loading...</td>
+                    <td id="line3-kw">Loading...</td>
+                </tr>
+
+                <!-- Row for Reactive Power (KVAR) -->
+                <tr>
+                    <td>KVAR</td>
+                    <td id="line1-kvar">Loading...</td>
+                    <td id="line2-kvar">Loading...</td>
+                    <td id="line3-kvar">Loading...</td>
+                </tr>
+
+                <!-- Row for Apparent Power (KVA) -->
+                <tr>
+                    <td>KVA</td>
+                    <td id="line1-kva">Loading...</td>
+                    <td id="line2-kva">Loading...</td>
+                    <td id="line3-kva">Loading...</td>
+                </tr>
+
+                <!-- Row for Power Factor (PF) -->
+                <tr>
+                    <td>PF</td>
+                    <td id="line1-pf">Loading...</td>
+                    <td id="line2-pf">Loading...</td>
+                    <td id="line3-pf">Loading...</td>
+                </tr>
+
+                <!-- Row for Voltage Angle (V ANGLE) -->
+                <tr>
+                    <td>V ANGLE</td>
+                    <td id="line1-v-angle">Loading...</td>
+                    <td id="line2-v-angle">Loading...</td>
+                    <td id="line3-v-angle">Loading...</td>
+                </tr>
+
+                <!-- Row for Current Angle (I ANGLE) -->
+                <tr>
+                    <td>I ANGLE</td>
+                    <td id="line1-i-angle">Loading...</td>
+                    <td id="line2-i-angle">Loading...</td>
+                    <td id="line3-i-angle">Loading...</td>
+                </tr>
+
+                <!-- Row for Voltage Total Harmonic Distortion (V THD) -->
+                <tr>
+                    <td>V THD</td>
+                    <td id="line1-v-thd">Loading...</td>
+                    <td id="line2-v-thd">Loading...</td>
+                    <td id="line3-v-thd">Loading...</td>
+                </tr>
+
+                <!-- Row for Current Total Harmonic Distortion (I THD) -->
+                <tr>
+                    <td>I THD</td>
+                    <td id="line1-i-thd">Loading...</td>
+                    <td id="line2-i-thd">Loading...</td>
+                    <td id="line3-i-thd">Loading...</td>
+                </tr>
+
+                <!-- Row for Current Total Demand Distortion (I TDD) -->
+                <tr>
+                    <td>I TDD</td>
+                    <td id="line1-i-tdd">Loading...</td>
+                    <td id="line2-i-tdd">Loading...</td>
+                    <td id="line3-i-tdd">Loading...</td>
+                </tr>
+
+                <!-- Row for Frequency (FREQ) -->
+                <tr>
+                    <td>FREQ</td>
+                    <td id="line1-freq">Loading...</td>
+                    <td id="line2-freq">Loading...</td>
+                    <td id="line3-freq">Loading...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Total Values (Pic 2) -->
+    <div id="totalValues" style="display: none;">
+        <h2>Totals</h2>
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Total Values -->
+                <tr>
+                    <td>V TOTAL</td>
+                    <td id="v-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>I1</td>
+                    <td id="i1-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>I2</td>
+                    <td id="i2-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>I3</td>
+                    <td id="i3-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>KW TOTAL</td>
+                    <td id="kw-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>KVAR TOTAL</td>
+                    <td id="kvar-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>KVA TOTAL</td>
+                    <td id="kva-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>PF TOTAL</td>
+                    <td id="pf-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>IN</td>
+                    <td id="in-total">Loading...</td>
+                </tr>
+                <tr>
+                    <td>FREQ</td>
+                    <td id="freq-total">Loading...</td>
+                </tr>
+            </tbody>
+
+        </table>
+    </div>
+    <script>
+        function fetchData() {
+            fetch('/flaskapp/get_real_time_data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update values for Line 1
+                    document.getElementById('line1-v').innerText = data.line1.V;
+                    document.getElementById('line1-i').innerText = data.line1.I;
+                    document.getElementById('line1-kw').innerText = data.line1.KW;
+                    document.getElementById('line1-kvar').innerText = data.line1.KVAR;
+                    document.getElementById('line1-kva').innerText = data.line1.KVA;
+                    document.getElementById('line1-pf').innerText = data.line1.PF;
+                    document.getElementById('line1-v-angle').innerText = data.line1.V_ANGLE;
+                    document.getElementById('line1-i-angle').innerText = data.line1.I_ANGLE;
+                    document.getElementById('line1-v-thd').innerText = data.line1.V_THD;
+                    document.getElementById('line1-i-thd').innerText = data.line1.I_THD;
+                    document.getElementById('line1-i-tdd').innerText = data.line1.I_TDD;
+                    document.getElementById('line1-freq').innerText = data.line1.FREQ;
+
+                    // Update values for Line 2
+                    document.getElementById('line2-v').innerText = data.line2.V;
+                    document.getElementById('line2-i').innerText = data.line2.I;
+                    document.getElementById('line2-kw').innerText = data.line2.KW;
+                    document.getElementById('line2-kvar').innerText = data.line2.KVAR;
+                    document.getElementById('line2-kva').innerText = data.line2.KVA;
+                    document.getElementById('line2-pf').innerText = data.line2.PF;
+                    document.getElementById('line2-v-angle').innerText = data.line2.V_ANGLE;
+                    document.getElementById('line2-i-angle').innerText = data.line2.I_ANGLE;
+                    document.getElementById('line2-v-thd').innerText = data.line2.V_THD;
+                    document.getElementById('line2-i-thd').innerText = data.line2.I_THD;
+                    document.getElementById('line2-i-tdd').innerText = data.line2.I_TDD;
+                    document.getElementById('line2-freq').innerText = data.line2.FREQ;
+
+                    // Update values for Line 3
+                    document.getElementById('line3-v').innerText = data.line3.V;
+                    document.getElementById('line3-i').innerText = data.line3.I;
+                    document.getElementById('line3-kw').innerText = data.line3.KW;
+                    document.getElementById('line3-kvar').innerText = data.line3.KVAR;
+                    document.getElementById('line3-kva').innerText = data.line3.KVA;
+                    document.getElementById('line3-pf').innerText = data.line3.PF;
+                    document.getElementById('line3-v-angle').innerText = data.line3.V_ANGLE;
+                    document.getElementById('line3-i-angle').innerText = data.line3.I_ANGLE;
+                    document.getElementById('line3-v-thd').innerText = data.line3.V_THD;
+                    document.getElementById('line3-i-thd').innerText = data.line3.I_THD;
+                    document.getElementById('line3-i-tdd').innerText = data.line3.I_TDD;
+                    document.getElementById('line3-freq').innerText = data.line3.FREQ;
+
+                    // Update total values
+                    document.getElementById('v-total').innerText = data.total_values.V_TOTAL;
+                    document.getElementById('i1-total').innerText = data.total_values.I1;
+                    document.getElementById('i2-total').innerText = data.total_values.I2;
+                    document.getElementById('i3-total').innerText = data.total_values.I3;
+                    document.getElementById('kw-total').innerText = data.total_values.KW_TOTAL;
+                    document.getElementById('kvar-total').innerText = data.total_values.KVAR_TOTAL;
+                    document.getElementById('kva-total').innerText = data.total_values.KVA_TOTAL;
+                    document.getElementById('pf-total').innerText = data.total_values.PF_TOTAL;
+                    document.getElementById('in-total').innerText = data.total_values.IN;
+                    document.getElementById('freq-total').innerText = data.total_values.FREQ;
+
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // Fetch data every 2 seconds (2000 milliseconds)
+        setInterval(fetchData, 2000);
+
+
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+
+    <nav>
+        <ul>
+            <li><a href="/flaskapp">Home</a></li>
+            <li><a href="/flaskapp/engineering">Engineering</a></li>
+            <li><a href="/flaskapp/history">History</a></li>
+            <li><a href="/flaskapp/settings">Settings</a></li>
+        </ul>
+    </nav>
+    <div id="container">
+        <!-- Left panel for the tree view -->
+        <div class="left-panel">
+            <div class="tree-view">
+                <ul>
+                    <li class="parent">Element47</li>
+                    <ul>
+                        <li class="parent">192.168.2.101</li>
+                        <ul>
+                            <li class="child">Node 1</li>
+                            <li class="child">Node 2</li>
+                            <li class="child">Node 3</li>
+                            <li class="child">Node 4</li>
+                            <li class="child">Node 5</li>
+                        </ul>
+                        <li class="parent">192.168.2.205</li>
+                        <ul>
+                            <li class="child">Node 1</li>
+                            <li class="child">Node 2</li>
+                            <li class="child">Node 3</li>
+                            <li class="child">Node 4</li>
+                            <li class="child">Node 5</li>
+                        </ul>
+                        <li class="parent">192.168.2.102</li>
+                        <ul>
+                            <li class="child">Node 1</li>
+                            <li class="child">Node 2</li>
+                            <li class="child">Node 3</li>
+                            <li class="child">Node 4</li>
+                            <li class="child">Node 5</li>
+                        </ul>
+                    </ul>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main content area for the settings -->
+        <div class="main-content">
+            <!-- Settings content will be dynamically updated here -->
+            <div class="settings-container">
+                <h2>CURRENT SETTINGS</h2>
+                <div class="settings-section">
+                    <h3>HMI:</h3>
+                    <p><strong>IP:</strong> {{ hmi_ip }}</p>
+                    <p><strong>SUBNET:</strong> {{ hmi_subnet }}</p>
+                    <p><strong>GATEWAY:</strong> {{ hmi_gateway }}</p>
+                </div>
+                <div class="settings-section">
+                    <h3>METER:</h3>
+                    <p><strong>IP:</strong> {{ meter_ip }}</p>
+                    <p><strong>SUBNET:</strong> {{ meter_subnet }}</p>
+                    <p><strong>GATEWAY:</strong> {{ meter_gateway }}</p>
+                    <p><strong>MODBUS NODE:</strong> {{ meter_node }}</p>
+                    <p><strong>CT RATIO:</strong> {{ ct_ratio }}</p>
+                    <p><strong>SERIAL NO:</strong> {{ serial_no }}</p>
+                    <p><strong>FIRMWARE:</strong> {{ firmware }}</p>
+                    <p><strong>BOOT:</strong> {{ boot }}</p>
+                    <p><strong>MODEL:</strong> {{ model_name }}</p>
+
+                </div>
+            </div>
+        </div>
+        <div id="loading" style="display:none;">
+            <p>Loading...</p>
+        </div>
+
+    </div>
+
+    <script>
+        // Function to toggle parent nodes and send data on child node clicks
+        document.querySelectorAll('.tree-view .parent').forEach(function (parentNode) {
+            // Add click event for the parent node (to toggle expand/collapse)
+            parentNode.addEventListener('click', function (e) {
+                e.stopPropagation();  // Prevent event from bubbling up
+
+                // Find the next sibling <ul> (the child nodes)
+                const childList = this.nextElementSibling;
+
+                // Toggle the collapse/expand by adjusting the class and display
+                if (childList && childList.tagName === 'UL') {
+                    childList.style.display = (childList.style.display === 'block') ? 'none' : 'block';
+                    this.classList.toggle('collapsed');
+                }
+            });
+        });
+
+        document.querySelectorAll('.tree-view .child').forEach(function (childNode) {
+            // Add click event for child nodes
+            childNode.addEventListener('click', function (e) {
+                e.stopPropagation();  // Prevent parent toggle when child is clicked
+
+                const parentStr = this.closest('ul').previousElementSibling.textContent.trim();
+                const childStr = this.textContent.trim();
+                console.log('Child clicked:', childStr);
+
+                // Display the loading indicator when a request is sent
+                document.getElementById('loading').style.display = 'block';
+                
+                pollForSettings(parentStr, childStr);
+            });
+        });
+
+        function pollForSettings(parentStr,childStr, attempt = 1){
+            document.querySelector('.settings-container').style.display = 'none';
+
+            // Send parent and child data to Flask using AJAX
+            fetch('/flaskapp/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ parent: parentStr, child: childStr })
+            })
+                .then(response => response.json())  // Handle the response as JSON
+                .then(data => {
+                    if (isValid(data, parentStr, childStr)){
+                        // Once data is received, immediately update the main-content with the new configuration data
+                        document.querySelector('.settings-container').innerHTML = `
+                            <h2>CURRENT SETTINGS</h2>
+                            <div class="settings-section">
+                                <h3>HMI:</h3>
+                                <p><strong>IP:</strong> ${data.hmi_ip}</p>
+                                <p><strong>SUBNET:</strong> ${data.hmi_subnet}</p>
+                                <p><strong>GATEWAY:</strong> ${data.hmi_gateway}</p>
+                            </div>
+                            <div class="settings-section">
+                                <h3>METER:</h3>
+                                <p><strong>IP:</strong> ${data.meter_ip}</p>
+                                <p><strong>SUBNET:</strong> ${data.meter_subnet}</p>
+                                <p><strong>GATEWAY:</strong> ${data.meter_gateway}</p>
+                                <p><strong>MODBUS NODE:</strong> ${data.meter_node}</p>
+                                <p><strong>CT RATIO:</strong> ${data.ct_ratio}</p>
+                                <p><strong>SERIAL NO:</strong> ${data.serial_no}</p>
+                                <p><strong>FIRMWARE:</strong> ${data.firmware}</p>
+                                <p><strong>BOOT:</strong> ${data.boot}</p>
+                                <p><strong>MODEL:</strong> ${data.model_name}</p>
+                            </div>
+                        `;
+                        // Hide the loading indicator after the update
+                        document.getElementById('loading').style.display = 'none';
+                        document.querySelector('.settings-container').style.display = 'block';
+                } else if (attempt < 10 ){
+                    setTimeout(() => pollForSettings(parentStr, childStr, attempt + 1), 1000);
+                } else {
+                    console.error('Settings update timed out.');
+                    document.getElementById('loading').style.display = 'none';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Hide the loading indicator if there's an error
+                document.getElementById('loading').style.display = 'none';
+            });
+        };
+
+        function isValid(data, parentStr, childStr) {
+            const nodeNumber = childStr.match(/\d+$/);
+            return data.meter_ip === parentStr && data.meter_node === (nodeNumber ? nodeNumber[0] : '');
+        }
+    </script>
+
+
+</body>
+
+</html>

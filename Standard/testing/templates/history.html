@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+
+<body>
+    <nav>
+        <ul>
+            <li><a href="/flaskapp">Home</a></li>
+            <li><a href="/flaskapp/engineering">Engineering</a></li>
+            <li><a href="/flaskapp/history">History</a></li>
+            <li><a href="/flaskapp/settings">Settings</a></li>
+        </ul>
+    </nav>
+    <div id="container">
+        <div id="left-panel">
+            <label for="start-date">Start Date:</label>
+            <input type="date" id="start-date" name="start-date" placeholder="Start Date">
+            <label for="start-time">00:00:00</label><br><br>
+
+            <label for="end-date">End Date:</label>
+            <input type="date" id="end-date" name="end-date" placeholder="End Date">
+            <label for="end-time">00:00:00</label><br><br>
+
+            <button id="apply-range">Apply Range</button><br>
+
+            <button onclick="debouncedFetchDataLog(1)">DATALOG 1</button>
+            <button onclick="debouncedFetchDataLog(2)">DATALOG 2</button>
+            <button onclick="debouncedFetchDataLog(3)">DATALOG 3</button>
+            <button onclick="debouncedLoadEventLog()">EVENT LOG</button><br>
+        </div>
+        <div id="loading-message" style="display: none;">Fetching data, please wait...</div>
+        <div id="main-content">
+
+            <h1 id="log-name">Data Log</h1>
+            <p id="record-count">Number of Records: </p>
+
+            <table id="data-table">
+                <thead>
+                    <tr id="table-headers">
+                        <!-- Table headers -->
+                    </tr>
+                </thead>
+                <tbody id="data-log-body">
+                    <!-- 123 rows will be inserted here dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 1;
+        let ipaddress = '';
+        let nodeno = '';
+        const rowsPerPage = 10; // Customize the number of rows per page
+        let fullData = [];  // This will hold the full dataset
+
+        document.getElementById('apply-range').addEventListener('click', () => {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            console.log(`Start Date: ${startDate}, End Date: ${endDate}`);  // Debugging
+
+        });
+
+        function debounce(func, delay) {
+            let timer;
+            return function (...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => func.apply(this, args), delay);
+            };
+        }
+        const debouncedFetchDataLog = debounce(fetchDataLog, 2000);
+        const debouncedLoadEventLog = debounce(loadEventLog, 2000);
+
+
+        function updateTableHeaders(type) {
+            const tableHeaders = document.getElementById('table-headers');
+            tableHeaders.innerHTML = ''; // Clear existing headers
+
+            let headers = [];
+
+            if (type === 'datalog') {
+                headers = ['#', 'Time Stamp', 'Total kW', 'Peak kW', 'Shoulder kW', 'Off Peak kW', 'Mx Dmd kW', 'Mx Dmd kVA'];
+            } else if (type === 'eventlog') {
+                headers = ['#', 'Time Stamp', 'Cause', 'Source', 'Effect', '', '', '', ''];
+            }
+
+            // Populate headers dynamically
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                tableHeaders.appendChild(th);
+            });
+        }
+
+
+        function fetchDataLog(DataLoggerNo) {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            // Update the headers for Data Log
+            updateTableHeaders('datalog');
+            let loddingMessage =  `Fetching all data, please wait..`
+            if (startDate) loddingMessage = `Fetching data from ${startDate} 00:00:00, please wait..`
+            if (endDate) loddingMessage = `Fetching data to ${endDate} 00:00:00, please wait..`
+            if (startDate && endDate) loddingMessage = `Fetching data from ${startDate} 00:00:00 \nto ${endDate} 00:00:00, please wait..`
+
+            // Show the loading message and hide the table
+            document.getElementById('loading-message').innerText = loddingMessage
+            document.getElementById('loading-message').style.display = 'block';
+            document.getElementById('main-content').style.display = 'none';  // Hide data table during loading
+
+            setTimeout(() => {
+                let url = `/flaskapp/datalogger/${DataLoggerNo}?`;
+                if (startDate) url += `&start_date=${startDate}`;
+                if (endDate) url += `&end_date=${endDate}`;
+                 
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Check if data is available
+                        if (!data || !data.data || data.data.length === 0) {
+                            document.getElementById('loading-message').innerText = "No data available for the selected range.";
+                            return;
+                        }
+
+                        document.getElementById('log-name').innerText = data.log_name;
+                        document.getElementById('record-count').innerText = "No Records: " + data.record_count;
+
+                        // Store the full dataset in a global variable
+                        fullData = data.data;
+                        ipaddress = data.ipaddress;
+                        nodeno = data.nodeno;
+
+                        setTimeout(() => {
+                            document.getElementById('loading-message').style.display = 'none';
+                            document.getElementById('main-content').style.display = 'block';
+                        }, 2000);  // Hides the message after 2 seconds
+
+                        // Display the first page of data
+                        displayPageData(currentPage);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        document.getElementById('loading-message').innerText = "Error loading data: " + error.message;
+
+                    });
+            }, 0);
+        }
+
+
+        function displayPageData(page) {
+            const tableBody = document.getElementById('data-log-body');
+            tableBody.innerHTML = '';  // Clear existing table rows
+
+            // Check if fullData is available
+            if (!fullData || fullData.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8">No data available</td></tr>';
+                return;
+            }
+
+            // Calculate the slice of data for the current page
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedData = fullData.slice(start, end);
+
+            // Populate the table with paginated data
+            paginatedData.forEach((row, index) => {
+                const tableRow = document.createElement('tr');
+                tableRow.innerHTML = row.map(cell => `<td>${cell}</td>`).join('');
+                tableBody.appendChild(tableRow);
+            });
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayPageData(currentPage);
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(fullData.length / rowsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayPageData(currentPage);
+            }
+        }
+        
+        function loadEventLog(){
+            // Update the headers for Data Log
+            updateTableHeaders('datalog');
+            let loddingMessage =  `Fetching all data, please wait..`
+
+            // Show the loading message and hide the table
+            document.getElementById('loading-message').innerText = loddingMessage
+            document.getElementById('loading-message').style.display = 'block';
+            document.getElementById('main-content').style.display = 'none';  // Hide data table during loading
+
+            setTimeout(() => {
+                let url = `/flaskapp/eventlogger`;
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Check if data is available
+                        if (!data || !data.data || data.data.length === 0) {
+                            document.getElementById('loading-message').innerText = "No data available for the selected range.";
+                            return;
+                        }
+
+                        document.getElementById('log-name').innerText = data.log_name;
+                        document.getElementById('record-count').innerText = "Number of Records: " + data.data.length;
+
+                        // Store the full dataset in a global variable
+                        fullData = data.data;
+
+                        setTimeout(() => {
+                            document.getElementById('loading-message').style.display = 'none';
+                            document.getElementById('main-content').style.display = 'block';
+                        }, 2000);  // Hides the message after 2 seconds
+
+                        // Display the first page of data
+                        displayPageData(currentPage);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                        document.getElementById('loading-message').innerText = "Error loading data: " + error.message;
+
+                    });
+            }, 0);
+        }
+
+
+        function displayPageData(page) {
+            const tableBody = document.getElementById('data-log-body');
+            tableBody.innerHTML = '';  // Clear existing table rows
+
+            // Check if fullData is available
+            if (!fullData || fullData.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="8">No data available</td></tr>';
+                return;
+            }
+
+            // Calculate the slice of data for the current page
+            const start = (page - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const paginatedData = fullData.slice(start, end);
+
+            // Populate the table with paginated data
+            paginatedData.forEach((row, index) => {
+                const tableRow = document.createElement('tr');
+                tableRow.innerHTML = `
+                    <td>${row[0]}</td>
+                    <td>${row[1]}</td>
+                    <td>${row[2]}</td>
+                    <td>${row[3]}</td>
+                    <td>${row[4]}</td>
+                    <td>${row[5]}</td>
+                    <td>${row[6]}</td>
+                    <td>${row[7]}</td>
+
+                `;
+                tableBody.appendChild(tableRow);
+            });
+        }
+
+
+    </script>
+</body>
+
+</html>
